@@ -19,6 +19,12 @@
 	#status.expired { background: #e67e2233; }
 	.row { display: flex; gap: .6rem; }
 	.muted { opacity: .65; font-size: .85rem; }
+	.bar-track { background: #8883; border-radius: 5px; height: 10px; overflow: hidden; margin: .3rem 0 .5rem; }
+	.bar-fill { background: #6c47ff; height: 100%; transition: width .3s; }
+	.bar-fill.warn { background: #e67e22; }
+	.bar-fill.crit { background: #e74c3c; }
+	.res-row { display: flex; justify-content: space-between; font-size: .9rem; margin-top: .8rem; }
+	.res-row:first-child { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -26,6 +32,17 @@
 	<p class="muted">Hält das rollierende 5h-Nutzungsfenster deines Claude-Abos aktiv, per offiziellem Long-Lived-Token (<code>claude setup-token</code>).</p>
 
 	<div id="status">Lade Status…</div>
+
+	<fieldset>
+		<legend>Ressourcen-Verbrauch</legend>
+		<div class="res-row"><span>5-Stunden-Fenster</span><span id="res-5h-pct">–</span></div>
+		<div class="bar-track"><div class="bar-fill" id="res-5h-bar" style="width:0%"></div></div>
+		<div class="muted" id="res-5h-end">–</div>
+
+		<div class="res-row"><span>7-Tage-Fenster</span><span id="res-7d-pct">–</span></div>
+		<div class="bar-track"><div class="bar-fill" id="res-7d-bar" style="width:0%"></div></div>
+		<div class="muted" id="res-7d-end">–</div>
+	</fieldset>
 
 	<fieldset>
 		<legend>Modus</legend>
@@ -55,6 +72,17 @@ function fmt(sec) {
 	return h + ":" + String(m).padStart(2,'0') + ":" + String(s).padStart(2,'0');
 }
 
+function fmtClock(epochSec) {
+	if (!epochSec) return "–";
+	return new Date(epochSec * 1000).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+}
+
+function barClass(pct) {
+	if (pct >= 90) return "bar-fill crit";
+	if (pct >= 70) return "bar-fill warn";
+	return "bar-fill";
+}
+
 function renderStatus(s) {
 	const el = $("status");
 	if (!s.enabled) {
@@ -62,18 +90,32 @@ function renderStatus(s) {
 		el.textContent = "⏸ Deaktiviert.";
 	} else if (s.active) {
 		el.className = "active";
-		const pct = Math.round((s.utilization || 0) * 100);
-		el.textContent = "✅ Fenster aktiv — läuft ab in " + fmt(s.remaining_seconds) + " (" + pct + "% genutzt)";
+		el.textContent = "✅ Fenster aktiv — läuft ab in " + fmt(s.remaining_seconds);
 	} else {
 		el.className = "expired";
 		el.textContent = s.mode === "keepwarm"
 			? "⏳ Fenster abgelaufen — wird beim nächsten Check (max. 5 Min) automatisch neu gestartet."
 			: "⏳ Fenster abgelaufen — nächster Start um " + String(s.fixed_hour).padStart(2,'0') + ":" + String(s.fixed_minute).padStart(2,'0') + " Uhr.";
 	}
+	if (s.account_status && s.account_status !== "allowed" && s.account_status !== "unknown") {
+		el.textContent += " ⚠ Account-Status: " + s.account_status;
+	}
 	$("enabled").checked = s.enabled;
 	$("mode-keepwarm").checked = s.mode === "keepwarm";
 	$("mode-fixed").checked = s.mode === "fixed";
 	$("fixed-time").value = String(s.fixed_hour).padStart(2,'0') + ":" + String(s.fixed_minute).padStart(2,'0');
+
+	const pct5h = Math.round((s.utilization || 0) * 100);
+	$("res-5h-pct").textContent = s.window_end ? pct5h + "%" : "keine Daten";
+	$("res-5h-bar").style.width = pct5h + "%";
+	$("res-5h-bar").className = barClass(pct5h);
+	$("res-5h-end").textContent = s.window_end ? "Reset: " + fmtClock(s.window_end) : "Noch kein Ping gesendet.";
+
+	const pct7d = Math.round((s.utilization7d || 0) * 100);
+	$("res-7d-pct").textContent = s.window7d_end ? pct7d + "%" : "keine Daten";
+	$("res-7d-bar").style.width = pct7d + "%";
+	$("res-7d-bar").className = barClass(pct7d);
+	$("res-7d-end").textContent = s.window7d_end ? "Reset: " + fmtClock(s.window7d_end) : "Noch kein Ping gesendet.";
 }
 
 function refresh() {

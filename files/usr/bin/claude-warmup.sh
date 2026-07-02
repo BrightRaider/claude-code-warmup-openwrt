@@ -52,13 +52,17 @@ fire() {
 		return 1
 	fi
 
-	reset=$(tr -d '\r' < "$hdrfile" | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-5h-reset"{print $2}')
-	util=$(tr -d '\r' < "$hdrfile" | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-5h-utilization"{print $2}')
+	hdrs=$(tr -d '\r' < "$hdrfile")
 	rm -f "$hdrfile"
+	reset=$(echo "$hdrs"    | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-5h-reset"{print $2}')
+	util=$(echo "$hdrs"     | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-5h-utilization"{print $2}')
+	reset7d=$(echo "$hdrs"  | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-7d-reset"{print $2}')
+	util7d=$(echo "$hdrs"   | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-7d-utilization"{print $2}')
+	ustatus=$(echo "$hdrs"  | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-status"{print $2}')
 
 	if [ -n "$reset" ]; then
-		echo "${reset}:${util:-0}" > "$STATE_FILE"
-		log "OK: warmup sent, real window reset=$reset utilization=$util"
+		echo "${reset}:${util:-0}:${reset7d:-0}:${util7d:-0}:${ustatus:-unknown}" > "$STATE_FILE"
+		log "OK: warmup sent, 5h reset=$reset util=$util | 7d reset=$reset7d util=$util7d | status=$ustatus"
 	else
 		log "WARN: warmup sent but no rate-limit header found in response"
 	fi
@@ -90,11 +94,13 @@ do_status() {
 	fixed_hour=$(uci -q get $CONF.settings.fixed_hour); fixed_hour=${fixed_hour:-0}
 	fixed_minute=$(uci -q get $CONF.settings.fixed_minute); fixed_minute=${fixed_minute:-1}
 
-	reset=0
-	util=0
+	reset=0; util=0; reset7d=0; util7d=0; ustatus="unknown"
 	if [ -s "$STATE_FILE" ]; then
 		reset=$(cut -d: -f1 "$STATE_FILE")
 		util=$(cut -d: -f2 "$STATE_FILE")
+		reset7d=$(cut -d: -f3 "$STATE_FILE")
+		util7d=$(cut -d: -f4 "$STATE_FILE")
+		ustatus=$(cut -d: -f5 "$STATE_FILE")
 	fi
 	last_fire=0
 	[ -s "$LASTFIRE_FILE" ] && last_fire=$(cat "$LASTFIRE_FILE")
@@ -106,11 +112,16 @@ do_status() {
 	else
 		remaining=0
 	fi
+	remaining7d=0
+	if [ "$reset7d" -gt 0 ] 2>/dev/null; then
+		remaining7d=$((reset7d - now))
+		[ "$remaining7d" -lt 0 ] && remaining7d=0
+	fi
 	if [ "$remaining" -gt 0 ]; then active=true; else active=false; fi
 	if [ "$enabled" = "1" ]; then en=true; else en=false; fi
 
-	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"now":%s}\n' \
-		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "$now"
+	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"window7d_end":%s,"utilization7d":%s,"remaining7d_seconds":%s,"account_status":"%s","now":%s}\n' \
+		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "${reset7d:-0}" "${util7d:-0}" "$remaining7d" "$ustatus" "$now"
 }
 
 apply_cron() {

@@ -17,7 +17,7 @@ Claude's usage limit is a **rolling 5-hour window** that starts on your *first* 
 5. Two modes:
    - **Keep warm** (default): checks every 5 minutes, refires the instant the previous window has expired — your window is effectively always fresh.
    - **Fixed time**: fires once daily at a time you choose (00:00–23:59), e.g. right after midnight so your window has reset by the time you sit down to work.
-5. A small web UI on the router lets you switch modes and pick the time, and shows how much of the current window is left. It's also linked from LuCI under **Services → Claude Warmup**.
+5. A small web UI on the router lets you switch modes and pick the time, and shows how much of the current window is left. It also shows your **5h and 7-day usage** (percent utilized + reset time), since Pro/Max subscriptions are capped by both. It's linked from LuCI under **Services → Claude Warmup**.
 
 ## Requirements
 
