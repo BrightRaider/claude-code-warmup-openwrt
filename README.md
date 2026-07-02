@@ -4,6 +4,18 @@ Keeps your **Claude Pro/Max subscription's rolling 5-hour usage window** warm by
 
 Not affiliated with Anthropic. Community tool, MIT licensed.
 
+## Features
+
+- **Real window tracking** — reads Anthropic's own rate-limit response headers, not a local guess, so it stays accurate even if the window was actually started by other usage (Claude Code, claude.ai, mobile app) before this tool ever pinged.
+- **Two scheduling modes** — keep the window continuously warm (checks every 5 min, refires the instant it expires), or fire once daily at a fixed time you pick (00:00–23:59).
+- **5h + 7-day usage bars** — utilization and reset time for both subscription limits, at a glance.
+- **Token validity tracking** — enter your token's issue date once, get a running countdown to its 1-year expiry.
+- **Error detection** — the status box turns red immediately on an invalid/expired/revoked token; other failures (e.g. a network blip) only alarm after 3 in a row, so a single transient hiccup doesn't false-alarm. A built-in log viewer (📄) shows the last 100 lines.
+- **Optional password protection** — off by default; set your own passphrase for the page any time from a collapsible panel behind a lock icon, no reinstall needed.
+- **German/English UI** — auto-detected from the browser, switchable, remembered.
+- **LuCI integration** — reachable from Services → Claude Warmup, not just a standalone URL.
+- **Tiny footprint** — a handful of shell scripts + one static HTML page. No Node.js, no database, no build step — under 1MB installed including the `curl` dependency.
+
 ## The problem
 
 Claude's usage limit is a **rolling 5-hour window** that starts on your *first* message of the day, not at midnight. Start working at noon, and your window resets at noon — even if you're mid-task at 4:55pm.
@@ -54,8 +66,11 @@ Open `http://<router-ip>/claudewarmup/` (or LuCI → Services → Claude Warmup)
 
 - Toggle the whole thing on/off
 - Switch between **Keep warm** and **Fixed time** mode, and pick the time
-- See how much of the current 5h window is left
+- See your 5h, 7-day, and token-validity usage bars
 - Fire a manual test ping
+- View the last 100 log lines (📄 icon)
+- Set or remove a page password (🔒/🔓 icon)
+- Switch between German and English (DE/EN)
 
 ## Security note
 
