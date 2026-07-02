@@ -71,6 +71,9 @@ case "$ACTION" in
 		/usr/bin/claude-warmup.sh fire
 		status_with_protected
 		;;
+	log)
+		/usr/bin/claude-warmup.sh log
+		;;
 	setpw)
 		umask 077
 		if [ -z "$P_NEWPW" ]; then

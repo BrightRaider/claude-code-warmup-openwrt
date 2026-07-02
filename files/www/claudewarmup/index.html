@@ -21,9 +21,11 @@
 	input[type=time] { font-size: 1rem; padding: .2rem; }
 	button.action { font-size: 1rem; padding: .5rem 1rem; border-radius: 6px; border: 1px solid #8884; cursor: pointer; }
 	button.primary { background: #6c47ff; color: #fff; border: none; }
-	#status { padding: .8rem; border-radius: 8px; background: #8881; margin-bottom: 1rem; font-size: .95rem; }
+	#status { padding: .8rem; border-radius: 8px; background: #8881; margin-bottom: 1rem; font-size: .95rem; border: 2px solid transparent; }
 	#status.active { background: #2ecc7133; }
 	#status.expired { background: #e67e2233; }
+	#status.error { border-color: #e74c3c; }
+	.log-box { max-height: 240px; overflow-y: auto; font-size: .75rem; white-space: pre-wrap; word-break: break-all; background: #8881; padding: .6rem; border-radius: 6px; margin: 0; }
 	.row { display: flex; gap: .6rem; }
 	.muted { opacity: .65; font-size: .85rem; }
 	.bar-track { background: #8883; border-radius: 5px; height: 10px; overflow: hidden; margin: .3rem 0 .5rem; }
@@ -40,6 +42,7 @@
 	<div class="header-row">
 		<h1>⚡ Claude Warmup</h1>
 		<div class="lang-switch">
+			<button class="icon-btn" id="log-btn" title="">📄</button>
 			<button class="icon-btn" id="lock-btn" title="">🔓</button>
 			<button id="lang-de" title="Deutsch">DE</button>
 			<button id="lang-en" title="English">EN</button>
@@ -84,7 +87,12 @@
 			<button class="action" id="trigger" data-i18n="triggerBtn"></button>
 		</div>
 
-		<p class="muted" id="log"></p>
+		<p class="muted" id="msg"></p>
+
+		<fieldset id="log-panel" style="display:none">
+			<legend data-i18n="logTitle"></legend>
+			<pre class="log-box" id="log-content"></pre>
+		</fieldset>
 
 		<fieldset id="sec-panel" style="display:none">
 			<legend data-i18n="secTitle"></legend>
@@ -138,7 +146,10 @@ const translations = {
 		secSetBtn: "Setzen",
 		secRemoveBtn: "Schutz entfernen",
 		secSetOk: "Passwort gesetzt.",
-		secRemoveOk: "Schutz entfernt."
+		secRemoveOk: "Schutz entfernt.",
+		logTitle: "Protokoll (letzte 100 Zeilen)",
+		errorUnauthorized: "⚠ Token ungültig/abgelaufen — neuen Token per 'claude setup-token' erzeugen und in /etc/claudewarmup/token eintragen.",
+		errorGeneric: "⚠ Letzte Pings sind fehlgeschlagen — Protokoll (📄) prüfen."
 	},
 	en: {
 		intro: "Keeps your Claude subscription's rolling 5h usage window warm, via the official long-lived token (claude setup-token).",
@@ -177,7 +188,10 @@ const translations = {
 		secSetBtn: "Set",
 		secRemoveBtn: "Remove protection",
 		secSetOk: "Password set.",
-		secRemoveOk: "Protection removed."
+		secRemoveOk: "Protection removed.",
+		logTitle: "Log (last 100 lines)",
+		errorUnauthorized: "⚠ Token invalid/expired — generate a new one with 'claude setup-token' and update /etc/claudewarmup/token.",
+		errorGeneric: "⚠ Recent pings have been failing — check the log (📄)."
 	}
 };
 
@@ -242,6 +256,10 @@ function renderStatus(s) {
 	if (s.account_status && s.account_status !== "allowed" && s.account_status !== "unknown") {
 		el.textContent += t("accountStatus") + s.account_status;
 	}
+	if (s.has_error) {
+		el.className += " error";
+		el.textContent += " " + (s.error_reason === "unauthorized" ? t("errorUnauthorized") : t("errorGeneric"));
+	}
 	$("enabled").checked = s.enabled;
 	$("mode-keepwarm").checked = s.mode === "keepwarm";
 	$("mode-fixed").checked = s.mode === "fixed";
@@ -264,11 +282,23 @@ function renderStatus(s) {
 	$("lock-btn").textContent = s.protected ? "🔒" : "🔓";
 	$("lock-btn").className = "icon-btn" + (s.protected ? " on" : "");
 	$("lock-btn").title = t("secTitle");
+	$("log-btn").title = t("logTitle");
 }
 
 function toggleSecPanel() {
 	const panel = $("sec-panel");
 	panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+function toggleLogPanel() {
+	const panel = $("log-panel");
+	const opening = panel.style.display === "none";
+	panel.style.display = opening ? "block" : "none";
+	if (opening) {
+		apiCall("log")
+			.then(r => { $("log-content").textContent = r.log || ""; })
+			.catch(() => {});
+	}
 }
 
 let authKey = localStorage.getItem("cw_auth") || "";
@@ -323,18 +353,19 @@ $("save").addEventListener("click", () => {
 	const [h, m] = $("fixed-time").value.split(":");
 	const enabled = $("enabled").checked ? 1 : 0;
 	apiCall("set", `mode=${mode}&hour=${parseInt(h,10)}&minute=${parseInt(m,10)}&enabled=${enabled}`)
-		.then(s => { renderStatus(s); $("log").textContent = t("saved") + new Date().toLocaleTimeString(); })
+		.then(s => { renderStatus(s); $("msg").textContent = t("saved") + new Date().toLocaleTimeString(); })
 		.catch(() => {});
 });
 
 $("trigger").addEventListener("click", () => {
-	$("log").textContent = t("sending");
+	$("msg").textContent = t("sending");
 	apiCall("trigger")
-		.then(s => { renderStatus(s); $("log").textContent = t("triggered") + new Date().toLocaleTimeString(); })
+		.then(s => { renderStatus(s); $("msg").textContent = t("triggered") + new Date().toLocaleTimeString(); })
 		.catch(() => {});
 });
 
 $("lock-btn").addEventListener("click", toggleSecPanel);
+$("log-btn").addEventListener("click", toggleLogPanel);
 
 $("sec-set").addEventListener("click", () => {
 	const pw = $("sec-newpw").value;
@@ -345,7 +376,7 @@ $("sec-set").addEventListener("click", () => {
 			localStorage.setItem("cw_auth", authKey);
 			renderStatus(s);
 			$("sec-newpw").value = "";
-			$("log").textContent = t("secSetOk");
+			$("msg").textContent = t("secSetOk");
 			toggleSecPanel();
 		})
 		.catch(() => {});
@@ -357,7 +388,7 @@ $("sec-remove").addEventListener("click", () => {
 			authKey = "";
 			localStorage.removeItem("cw_auth");
 			renderStatus(s);
-			$("log").textContent = t("secRemoveOk");
+			$("msg").textContent = t("secRemoveOk");
 			toggleSecPanel();
 		})
 		.catch(() => {});

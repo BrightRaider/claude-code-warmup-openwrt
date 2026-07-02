@@ -18,6 +18,7 @@ Claude's usage limit is a **rolling 5-hour window** that starts on your *first* 
    - **Keep warm** (default): checks every 5 minutes, refires the instant the previous window has expired — your window is effectively always fresh.
    - **Fixed time**: fires once daily at a time you choose (00:00–23:59), e.g. right after midnight so your window has reset by the time you sit down to work.
 5. A small web UI on the router lets you switch modes and pick the time, and shows how much of the current window is left. It also shows your **5h and 7-day usage** (percent utilized + reset time), since Pro/Max subscriptions are capped by both. It's linked from LuCI under **Services → Claude Warmup**.
+6. If pings start failing, the status box gets a **red border**. A token that's invalid/expired/revoked (HTTP 401/403) flags this immediately, since that never fixes itself. Other failures (e.g. a network blip) only flag after 3 in a row, so a single transient hiccup during keep-warm's 5-minute checks doesn't cause false alarms. A 📄 button in the header shows the last 100 log lines for troubleshooting.
 
 ## Requirements
 

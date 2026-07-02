@@ -10,13 +10,33 @@ MODEL="claude-haiku-4-5-20251001"
 TOKEN_FILE=$(uci -q get $CONF.settings.token_file); TOKEN_FILE=${TOKEN_FILE:-/etc/claudewarmup/token}
 STATE_FILE=$(uci -q get $CONF.settings.state_file); STATE_FILE=${STATE_FILE:-/etc/claudewarmup/state}
 LASTFIRE_FILE="${STATE_FILE}.last_fire"
+ERROR_FILE="${STATE_FILE}.error"
 LOG_FILE=$(uci -q get $CONF.settings.log_file); LOG_FILE=${LOG_FILE:-/etc/claudewarmup/warmup.log}
 MESSAGE=$(uci -q get $CONF.settings.message); MESSAGE=${MESSAGE:-"Automated warm-up ping to reset the Claude 5h usage window. Reply with a short acknowledgement."}
+
+FAIL_THRESHOLD=3
 
 log() {
 	ts=$(date '+%Y-%m-%d %H:%M:%S')
 	echo "$ts $1" >> "$LOG_FILE"
 	tail -n 200 "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE"
+}
+
+record_failure() {
+	reason="$1"
+	immediate="$2"
+	count=0
+	[ -s "$ERROR_FILE" ] && count=$(cut -d: -f1 "$ERROR_FILE" 2>/dev/null)
+	count=$((count + 1))
+	if [ "$immediate" = "1" ] || [ "$count" -ge "$FAIL_THRESHOLD" ]; then
+		echo "${count}:${reason}:1" > "$ERROR_FILE"
+	else
+		echo "${count}:${reason}:0" > "$ERROR_FILE"
+	fi
+}
+
+clear_failure() {
+	rm -f "$ERROR_FILE"
 }
 
 fire() {
@@ -42,13 +62,22 @@ fire() {
 
 	if [ $curl_rc -ne 0 ]; then
 		rm -f "$hdrfile"
+		record_failure "network" 0
 		log "ERROR: curl failed (rc=$curl_rc)"
 		return 1
 	fi
 
-	if [ "$http_code" != "200" ]; then
-		log "ERROR: warmup request failed (http=$http_code)"
+	if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
 		rm -f "$hdrfile"
+		record_failure "unauthorized" 1
+		log "ERROR: warmup request failed (http=$http_code) - token likely invalid/expired/revoked"
+		return 1
+	fi
+
+	if [ "$http_code" != "200" ]; then
+		rm -f "$hdrfile"
+		record_failure "http_$http_code" 0
+		log "ERROR: warmup request failed (http=$http_code)"
 		return 1
 	fi
 
@@ -59,6 +88,8 @@ fire() {
 	reset7d=$(echo "$hdrs"  | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-7d-reset"{print $2}')
 	util7d=$(echo "$hdrs"   | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-7d-utilization"{print $2}')
 	ustatus=$(echo "$hdrs"  | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-status"{print $2}')
+
+	clear_failure
 
 	if [ -n "$reset" ]; then
 		echo "${reset}:${util:-0}:${reset7d:-0}:${util7d:-0}:${ustatus:-unknown}" > "$STATE_FILE"
@@ -120,8 +151,21 @@ do_status() {
 	if [ "$remaining" -gt 0 ]; then active=true; else active=false; fi
 	if [ "$enabled" = "1" ]; then en=true; else en=false; fi
 
-	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"window7d_end":%s,"utilization7d":%s,"remaining7d_seconds":%s,"account_status":"%s","now":%s}\n' \
-		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "${reset7d:-0}" "${util7d:-0}" "$remaining7d" "$ustatus" "$now"
+	has_error=false
+	error_reason=""
+	if [ -s "$ERROR_FILE" ]; then
+		err_alarm=$(cut -d: -f3 "$ERROR_FILE" 2>/dev/null)
+		error_reason=$(cut -d: -f2 "$ERROR_FILE" 2>/dev/null)
+		[ "$err_alarm" = "1" ] && has_error=true
+	fi
+
+	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"window7d_end":%s,"utilization7d":%s,"remaining7d_seconds":%s,"account_status":"%s","has_error":%s,"error_reason":"%s","now":%s}\n' \
+		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "${reset7d:-0}" "${util7d:-0}" "$remaining7d" "$ustatus" "$has_error" "$error_reason" "$now"
+}
+
+do_log() {
+	esc=$(tail -n 100 "$LOG_FILE" 2>/dev/null | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}')
+	printf '{"log":"%s"}\n' "$esc"
 }
 
 apply_cron() {
@@ -155,5 +199,6 @@ case "$1" in
 	fire) fire ;;
 	status) do_status ;;
 	apply) apply_cron ;;
-	*) echo "Usage: $0 {check|fire|status|apply}" >&2; exit 1 ;;
+	log) do_log ;;
+	*) echo "Usage: $0 {check|fire|status|apply|log}" >&2; exit 1 ;;
 esac
