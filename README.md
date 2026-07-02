@@ -90,6 +90,10 @@ wget -qO- https://raw.githubusercontent.com/BrightRaider/claude-code-warmup-open
 
 This project only ever calls the API through a token minted by Anthropic's own `claude setup-token` command, using the same request shape Claude Code itself uses. It does not extract session credentials from `~/.claude/.credentials.json`, does not spoof a browser session, and does not automate the claude.ai website. If you're adapting this for something else, keep it that way — anything that impersonates a client using scraped credentials risks your account.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT
