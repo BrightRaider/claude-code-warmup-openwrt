@@ -36,7 +36,7 @@ Claude's usage limit is a **rolling 5-hour window** that starts on your *first* 
 
 ## Requirements
 
-- OpenWrt router with `apk` (25.12+) and cron (`/etc/init.d/cron`) — both present on stock OpenWrt. The installer pulls in `curl` (~500KB) automatically.
+- OpenWrt router with `uci` and cron (`/etc/init.d/cron`) — present on any stock OpenWrt. The installer pulls in `curl` (~500KB) automatically via `apk` (OpenWrt 25.12+) or `opkg` (older releases). Tested on OpenWrt 25.12.2 (aarch64); the underlying shell script has no version-specific dependencies, so considerably older releases should work too, just less thoroughly verified.
 - A Claude Pro or Max subscription.
 - Claude Code installed on any PC, just once, to generate the token.
 

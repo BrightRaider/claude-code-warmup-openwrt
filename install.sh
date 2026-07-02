@@ -9,8 +9,16 @@ echo "==> Installing Claude Warmup"
 
 if ! command -v curl >/dev/null 2>&1; then
 	echo "==> Installing curl (needed to read the real rate-limit reset time)"
-	apk update
-	apk add curl
+	if command -v apk >/dev/null 2>&1; then
+		apk update
+		apk add curl
+	elif command -v opkg >/dev/null 2>&1; then
+		opkg update
+		opkg install curl
+	else
+		echo "ERROR: neither apk nor opkg found. Install curl manually, then re-run this script." >&2
+		exit 1
+	fi
 fi
 
 mkdir -p /etc/claudewarmup /www/claudewarmup /www/luci-static/resources/view/services
