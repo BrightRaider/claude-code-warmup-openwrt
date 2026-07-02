@@ -10,6 +10,7 @@ P_MINUTE=""
 P_ENABLED=""
 P_AUTH=""
 P_NEWPW=""
+P_DATE=""
 
 old_ifs=$IFS
 IFS='&'
@@ -24,6 +25,7 @@ for kv in $QUERY_STRING; do
 		enabled) P_ENABLED="$qv" ;;
 		auth) P_AUTH="$qv" ;;
 		newpw) P_NEWPW="$qv" ;;
+		date) P_DATE="$qv" ;;
 	esac
 done
 IFS=$old_ifs
@@ -82,6 +84,14 @@ case "$ACTION" in
 			printf '%s' "$P_NEWPW" > "$WEBAUTH_FILE"
 			chmod 600 "$WEBAUTH_FILE"
 		fi
+		status_with_protected
+		;;
+	settoken)
+		case "$P_DATE" in
+			[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
+				/usr/bin/claude-warmup.sh settoken "$P_DATE"
+				;;
+		esac
 		status_with_protected
 		;;
 	*)

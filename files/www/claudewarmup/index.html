@@ -70,6 +70,14 @@
 			<div class="res-row"><span data-i18n="res7d"></span><span id="res-7d-pct">–</span></div>
 			<div class="bar-track"><div class="bar-fill" id="res-7d-bar" style="width:0%"></div></div>
 			<div class="muted" id="res-7d-end">–</div>
+
+			<div class="res-row"><span data-i18n="resToken"></span><span id="res-token-pct">–</span></div>
+			<div class="bar-track"><div class="bar-fill" id="res-token-bar" style="width:0%"></div></div>
+			<div class="muted" id="res-token-end">–</div>
+			<div class="row" id="token-setup" style="display:none; margin-top:.4rem">
+				<input type="date" id="token-date-input">
+				<button class="action primary" id="token-date-set" data-i18n="tokenSetBtn"></button>
+			</div>
 		</fieldset>
 
 		<fieldset>
@@ -149,7 +157,11 @@ const translations = {
 		secRemoveOk: "Schutz entfernt.",
 		logTitle: "Protokoll (letzte 100 Zeilen)",
 		errorUnauthorized: "⚠ Token ungültig/abgelaufen — neuen Token per 'claude setup-token' erzeugen und in /etc/claudewarmup/token eintragen.",
-		errorGeneric: "⚠ Letzte Pings sind fehlgeschlagen — Protokoll (📄) prüfen."
+		errorGeneric: "⚠ Letzte Pings sind fehlgeschlagen — Protokoll (📄) prüfen.",
+		resToken: "Token-Gültigkeit (1 Jahr)",
+		tokenSetBtn: "Setzen",
+		tokenNotSet: "Ausstellungsdatum des Tokens nicht bekannt — bitte einmalig eintragen (Datum von 'claude setup-token').",
+		tokenSetOk: "Ausstellungsdatum gespeichert."
 	},
 	en: {
 		intro: "Keeps your Claude subscription's rolling 5h usage window warm, via the official long-lived token (claude setup-token).",
@@ -191,7 +203,11 @@ const translations = {
 		secRemoveOk: "Protection removed.",
 		logTitle: "Log (last 100 lines)",
 		errorUnauthorized: "⚠ Token invalid/expired — generate a new one with 'claude setup-token' and update /etc/claudewarmup/token.",
-		errorGeneric: "⚠ Recent pings have been failing — check the log (📄)."
+		errorGeneric: "⚠ Recent pings have been failing — check the log (📄).",
+		resToken: "Token validity (1 year)",
+		tokenSetBtn: "Set",
+		tokenNotSet: "Token issue date unknown — enter it once (the date you ran 'claude setup-token').",
+		tokenSetOk: "Issue date saved."
 	}
 };
 
@@ -277,6 +293,20 @@ function renderStatus(s) {
 	$("res-7d-bar").className = barClass(pct7d);
 	$("res-7d-end").textContent = s.window7d_end ? t("resetLabel") + fmtClock(s.window7d_end) : t("noPingYet");
 
+	if (s.token_expiry) {
+		const pctTok = Math.min(100, Math.round((1 - s.token_days_left / 365) * 100));
+		$("res-token-pct").textContent = s.token_days_left + "d";
+		$("res-token-bar").style.width = pctTok + "%";
+		$("res-token-bar").className = barClass(pctTok);
+		$("res-token-end").textContent = t("resetLabel") + fmtClock(s.token_expiry);
+		$("token-setup").style.display = "none";
+	} else {
+		$("res-token-pct").textContent = t("noData");
+		$("res-token-bar").style.width = "0%";
+		$("res-token-end").textContent = t("tokenNotSet");
+		$("token-setup").style.display = "flex";
+	}
+
 	$("sec-state").textContent = s.protected ? t("secOn") : t("secOff");
 	$("sec-remove").style.display = s.protected ? "inline-block" : "none";
 	$("lock-btn").textContent = s.protected ? "🔒" : "🔓";
@@ -361,6 +391,14 @@ $("trigger").addEventListener("click", () => {
 	$("msg").textContent = t("sending");
 	apiCall("trigger")
 		.then(s => { renderStatus(s); $("msg").textContent = t("triggered") + new Date().toLocaleTimeString(); })
+		.catch(() => {});
+});
+
+$("token-date-set").addEventListener("click", () => {
+	const d = $("token-date-input").value;
+	if (!d) return;
+	apiCall("settoken", `date=${d}`)
+		.then(s => { renderStatus(s); $("msg").textContent = t("tokenSetOk"); })
 		.catch(() => {});
 });
 

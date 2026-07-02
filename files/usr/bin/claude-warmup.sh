@@ -11,6 +11,8 @@ TOKEN_FILE=$(uci -q get $CONF.settings.token_file); TOKEN_FILE=${TOKEN_FILE:-/et
 STATE_FILE=$(uci -q get $CONF.settings.state_file); STATE_FILE=${STATE_FILE:-/etc/claudewarmup/state}
 LASTFIRE_FILE="${STATE_FILE}.last_fire"
 ERROR_FILE="${STATE_FILE}.error"
+TOKEN_ISSUED_FILE="${STATE_FILE}.token_issued"
+TOKEN_VALIDITY_SECONDS=31536000
 LOG_FILE=$(uci -q get $CONF.settings.log_file); LOG_FILE=${LOG_FILE:-/etc/claudewarmup/warmup.log}
 MESSAGE=$(uci -q get $CONF.settings.message); MESSAGE=${MESSAGE:-"Automated warm-up ping to reset the Claude 5h usage window. Reply with a short acknowledgement."}
 
@@ -159,8 +161,27 @@ do_status() {
 		[ "$err_alarm" = "1" ] && has_error=true
 	fi
 
-	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"window7d_end":%s,"utilization7d":%s,"remaining7d_seconds":%s,"account_status":"%s","has_error":%s,"error_reason":"%s","now":%s}\n' \
-		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "${reset7d:-0}" "${util7d:-0}" "$remaining7d" "$ustatus" "$has_error" "$error_reason" "$now"
+	token_issued=0
+	[ -s "$TOKEN_ISSUED_FILE" ] && token_issued=$(cat "$TOKEN_ISSUED_FILE")
+	token_expiry=0
+	token_days_left=0
+	if [ "$token_issued" -gt 0 ] 2>/dev/null; then
+		token_expiry=$((token_issued + TOKEN_VALIDITY_SECONDS))
+		token_days_left=$(( (token_expiry - now) / 86400 ))
+		[ "$token_days_left" -lt 0 ] && token_days_left=0
+	fi
+
+	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"window7d_end":%s,"utilization7d":%s,"remaining7d_seconds":%s,"account_status":"%s","has_error":%s,"error_reason":"%s","token_expiry":%s,"token_days_left":%s,"now":%s}\n' \
+		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "${reset7d:-0}" "${util7d:-0}" "$remaining7d" "$ustatus" "$has_error" "$error_reason" "$token_expiry" "$token_days_left" "$now"
+}
+
+do_settoken() {
+	d="$1"
+	epoch=$(date -d "$d" +%s 2>/dev/null)
+	if [ -n "$epoch" ]; then
+		echo "$epoch" > "$TOKEN_ISSUED_FILE"
+		log "INFO: token issue date set to $d (epoch=$epoch)"
+	fi
 }
 
 do_log() {
@@ -200,5 +221,6 @@ case "$1" in
 	status) do_status ;;
 	apply) apply_cron ;;
 	log) do_log ;;
-	*) echo "Usage: $0 {check|fire|status|apply|log}" >&2; exit 1 ;;
+	settoken) do_settoken "$2" ;;
+	*) echo "Usage: $0 {check|fire|status|apply|log|settoken}" >&2; exit 1 ;;
 esac
