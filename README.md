@@ -4,6 +4,8 @@ Keeps your **Claude Pro/Max subscription's rolling 5-hour usage window** warm by
 
 Not affiliated with Anthropic. Community tool, MIT licensed.
 
+![Claude Warmup web UI](docs/screenshot.png)
+
 ## Features
 
 - **Real window tracking** — reads Anthropic's own rate-limit response headers, not a local guess, so it stays accurate even if the window was actually started by other usage (Claude Code, claude.ai, mobile app) before this tool ever pinged.
