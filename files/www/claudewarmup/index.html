@@ -260,6 +260,23 @@ function serverNow() {
 	return Date.now() / 1000 + serverClockOffset;
 }
 
+// The router stores fixed_hour/fixed_minute in ITS OWN local timezone (which may
+// not match the browser's, e.g. router on UTC, browser on CEST). These convert
+// between the two so the time picker always reflects the browser's local time.
+function routerToLocalTime(hour, minute, tzOffsetSeconds) {
+	const browserOffsetSeconds = -new Date().getTimezoneOffset() * 60;
+	const diffMinutes = Math.round((browserOffsetSeconds - (tzOffsetSeconds || 0)) / 60);
+	let total = ((hour * 60 + minute + diffMinutes) % 1440 + 1440) % 1440;
+	return { hour: Math.floor(total / 60), minute: total % 60 };
+}
+
+function localToRouterTime(hour, minute, tzOffsetSeconds) {
+	const browserOffsetSeconds = -new Date().getTimezoneOffset() * 60;
+	const diffMinutes = Math.round((browserOffsetSeconds - (tzOffsetSeconds || 0)) / 60);
+	let total = ((hour * 60 + minute - diffMinutes) % 1440 + 1440) % 1440;
+	return { hour: Math.floor(total / 60), minute: total % 60 };
+}
+
 function renderStatus(s, skipOffsetUpdate) {
 	lastStatus = s;
 	if (!skipOffsetUpdate) {
@@ -276,15 +293,17 @@ function renderStatus(s, skipOffsetUpdate) {
 	} else {
 		el.className = "expired";
 		let pastStartToday = true;
+		let localFixed = { hour: s.fixed_hour, minute: s.fixed_minute };
 		if (s.mode === "fixed") {
+			localFixed = routerToLocalTime(s.fixed_hour, s.fixed_minute, s.tz_offset_seconds);
 			const nowLocal = new Date();
 			const fixedToday = new Date(nowLocal);
-			fixedToday.setHours(s.fixed_hour, s.fixed_minute, 0, 0);
+			fixedToday.setHours(localFixed.hour, localFixed.minute, 0, 0);
 			pastStartToday = nowLocal >= fixedToday;
 		}
 		el.textContent = (s.mode === "keepwarm" || pastStartToday)
 			? t("expiredKeepwarm")
-			: t("expiredFixed") + String(s.fixed_hour).padStart(2,'0') + ":" + String(s.fixed_minute).padStart(2,'0') + t("clockSuffix");
+			: t("expiredFixed") + String(localFixed.hour).padStart(2,'0') + ":" + String(localFixed.minute).padStart(2,'0') + t("clockSuffix");
 	}
 	if (s.account_status && s.account_status !== "allowed" && s.account_status !== "unknown") {
 		el.textContent += t("accountStatus") + s.account_status;
@@ -296,7 +315,8 @@ function renderStatus(s, skipOffsetUpdate) {
 	$("enabled").checked = s.enabled;
 	$("mode-keepwarm").checked = s.mode === "keepwarm";
 	$("mode-fixed").checked = s.mode === "fixed";
-	$("fixed-time").value = String(s.fixed_hour).padStart(2,'0') + ":" + String(s.fixed_minute).padStart(2,'0');
+	const displayFixed = routerToLocalTime(s.fixed_hour, s.fixed_minute, s.tz_offset_seconds);
+	$("fixed-time").value = String(displayFixed.hour).padStart(2,'0') + ":" + String(displayFixed.minute).padStart(2,'0');
 
 	const pct5h = Math.round((s.utilization || 0) * 100);
 	$("res-5h-pct").textContent = s.window_end ? pct5h + "%" : t("noData");
@@ -405,9 +425,11 @@ $("gate-pw").addEventListener("keydown", (ev) => {
 
 $("save").addEventListener("click", () => {
 	const mode = document.querySelector('input[name=mode]:checked').value;
-	const [h, m] = $("fixed-time").value.split(":");
+	const [lh, lm] = $("fixed-time").value.split(":").map(Number);
+	const tzOffset = lastStatus ? lastStatus.tz_offset_seconds : 0;
+	const routerTime = localToRouterTime(lh, lm, tzOffset);
 	const enabled = $("enabled").checked ? 1 : 0;
-	apiCall("set", `mode=${mode}&hour=${parseInt(h,10)}&minute=${parseInt(m,10)}&enabled=${enabled}`)
+	apiCall("set", `mode=${mode}&hour=${routerTime.hour}&minute=${routerTime.minute}&enabled=${enabled}`)
 		.then(s => { renderStatus(s); $("msg").textContent = t("saved") + new Date().toLocaleTimeString(); })
 		.catch(() => {});
 });

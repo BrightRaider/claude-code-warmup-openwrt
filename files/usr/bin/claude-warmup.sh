@@ -176,8 +176,15 @@ do_status() {
 		[ "$token_days_left" -lt 0 ] && token_days_left=0
 	fi
 
-	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"window7d_end":%s,"utilization7d":%s,"remaining7d_seconds":%s,"account_status":"%s","has_error":%s,"error_reason":"%s","token_expiry":%s,"token_days_left":%s,"now":%s}\n' \
-		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "${reset7d:-0}" "${util7d:-0}" "$remaining7d" "$ustatus" "$has_error" "$error_reason" "$token_expiry" "$token_days_left" "$now"
+	tzraw=$(date +%z)
+	tzsign=$(echo "$tzraw" | cut -c1)
+	tzhh=$(echo "$tzraw" | cut -c2-3); tzhh=${tzhh#0}; [ -z "$tzhh" ] && tzhh=0
+	tzmm=$(echo "$tzraw" | cut -c4-5); tzmm=${tzmm#0}; [ -z "$tzmm" ] && tzmm=0
+	tz_offset_seconds=$((tzhh * 3600 + tzmm * 60))
+	[ "$tzsign" = "-" ] && tz_offset_seconds=$((0 - tz_offset_seconds))
+
+	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"window7d_end":%s,"utilization7d":%s,"remaining7d_seconds":%s,"account_status":"%s","has_error":%s,"error_reason":"%s","token_expiry":%s,"token_days_left":%s,"tz_offset_seconds":%s,"now":%s}\n' \
+		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "${reset7d:-0}" "${util7d:-0}" "$remaining7d" "$ustatus" "$has_error" "$error_reason" "$token_expiry" "$token_days_left" "$tz_offset_seconds" "$now"
 }
 
 do_settoken() {
