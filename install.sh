@@ -44,8 +44,18 @@ if [ ! -f /etc/config/claudewarmup ]; then
 	wget -qO /etc/config/claudewarmup "$BASE/etc/config/claudewarmup"
 fi
 
+if [ ! -s /etc/claudewarmup/webauth ]; then
+	umask 077
+	cat /proc/sys/kernel/random/uuid > /etc/claudewarmup/webauth
+	chmod 600 /etc/claudewarmup/webauth
+fi
+WEBAUTH=$(cat /etc/claudewarmup/webauth)
+
 /usr/bin/claude-warmup.sh apply
 
 echo
 echo "==> Done!"
 echo "Open http://<router-ip>/claudewarmup/  or  LuCI -> Services -> Claude Warmup"
+echo
+echo "Page password: $WEBAUTH"
+echo "(also stored at /etc/claudewarmup/webauth if you need it again)"

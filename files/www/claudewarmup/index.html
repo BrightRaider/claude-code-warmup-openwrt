@@ -29,6 +29,8 @@
 	.bar-fill.crit { background: #e74c3c; }
 	.res-row { display: flex; justify-content: space-between; font-size: .9rem; margin-top: .8rem; }
 	.res-row:first-child { margin-top: 0; }
+	#gate input[type=password] { font-size: 1rem; padding: .5rem; width: 100%; box-sizing: border-box; margin-bottom: .6rem; }
+	#gate-error { color: #e74c3c; font-size: .85rem; min-height: 1.2em; }
 </style>
 </head>
 <body>
@@ -41,35 +43,45 @@
 	</div>
 	<p class="muted" data-i18n="intro"></p>
 
-	<div id="status">…</div>
-
-	<fieldset>
-		<legend data-i18n="resTitle"></legend>
-		<div class="res-row"><span data-i18n="res5h"></span><span id="res-5h-pct">–</span></div>
-		<div class="bar-track"><div class="bar-fill" id="res-5h-bar" style="width:0%"></div></div>
-		<div class="muted" id="res-5h-end">–</div>
-
-		<div class="res-row"><span data-i18n="res7d"></span><span id="res-7d-pct">–</span></div>
-		<div class="bar-track"><div class="bar-fill" id="res-7d-bar" style="width:0%"></div></div>
-		<div class="muted" id="res-7d-end">–</div>
+	<fieldset id="gate">
+		<legend data-i18n="gateTitle"></legend>
+		<p class="muted" data-i18n="gateHint"></p>
+		<input type="password" id="gate-pw" autocomplete="current-password">
+		<button class="action primary" id="gate-submit" data-i18n="gateSubmit"></button>
+		<div id="gate-error"></div>
 	</fieldset>
 
-	<fieldset>
-		<legend data-i18n="modeTitle"></legend>
-		<label><input type="checkbox" id="enabled"> <span data-i18n="enabledLabel"></span></label>
-		<label><input type="radio" name="mode" value="keepwarm" id="mode-keepwarm"> <span data-i18n="modeKeepwarm"></span></label>
-		<label><input type="radio" name="mode" value="fixed" id="mode-fixed"> <span data-i18n="modeFixed"></span></label>
-		<div class="row" style="margin-left:1.6rem">
-			<input type="time" id="fixed-time" value="00:01">
+	<div id="app" style="display:none">
+		<div id="status">…</div>
+
+		<fieldset>
+			<legend data-i18n="resTitle"></legend>
+			<div class="res-row"><span data-i18n="res5h"></span><span id="res-5h-pct">–</span></div>
+			<div class="bar-track"><div class="bar-fill" id="res-5h-bar" style="width:0%"></div></div>
+			<div class="muted" id="res-5h-end">–</div>
+
+			<div class="res-row"><span data-i18n="res7d"></span><span id="res-7d-pct">–</span></div>
+			<div class="bar-track"><div class="bar-fill" id="res-7d-bar" style="width:0%"></div></div>
+			<div class="muted" id="res-7d-end">–</div>
+		</fieldset>
+
+		<fieldset>
+			<legend data-i18n="modeTitle"></legend>
+			<label><input type="checkbox" id="enabled"> <span data-i18n="enabledLabel"></span></label>
+			<label><input type="radio" name="mode" value="keepwarm" id="mode-keepwarm"> <span data-i18n="modeKeepwarm"></span></label>
+			<label><input type="radio" name="mode" value="fixed" id="mode-fixed"> <span data-i18n="modeFixed"></span></label>
+			<div class="row" style="margin-left:1.6rem">
+				<input type="time" id="fixed-time" value="00:01">
+			</div>
+		</fieldset>
+
+		<div class="row">
+			<button class="action primary" id="save" data-i18n="saveBtn"></button>
+			<button class="action" id="trigger" data-i18n="triggerBtn"></button>
 		</div>
-	</fieldset>
 
-	<div class="row">
-		<button class="action primary" id="save" data-i18n="saveBtn"></button>
-		<button class="action" id="trigger" data-i18n="triggerBtn"></button>
+		<p class="muted" id="log"></p>
 	</div>
-
-	<p class="muted" id="log"></p>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -100,7 +112,11 @@ const translations = {
 		saved: "Gespeichert ",
 		sending: "Sende Ping…",
 		triggered: "Manuell ausgelöst ",
-		locale: "de-DE"
+		locale: "de-DE",
+		gateTitle: "Zugang",
+		gateHint: "Diese Seite ist mit einem Passwort geschützt (aus der Installation, siehe SSH-Ausgabe).",
+		gateSubmit: "Entsperren",
+		gateWrong: "Falsches Passwort."
 	},
 	en: {
 		intro: "Keeps your Claude subscription's rolling 5h usage window warm, via the official long-lived token (claude setup-token).",
@@ -127,7 +143,11 @@ const translations = {
 		saved: "Saved ",
 		sending: "Sending ping…",
 		triggered: "Triggered manually ",
-		locale: "en-US"
+		locale: "en-US",
+		gateTitle: "Access",
+		gateHint: "This page is password-protected (from the install output over SSH).",
+		gateSubmit: "Unlock",
+		gateWrong: "Wrong password."
 	}
 };
 
@@ -210,33 +230,76 @@ function renderStatus(s) {
 	$("res-7d-end").textContent = s.window7d_end ? t("resetLabel") + fmtClock(s.window7d_end) : t("noPingYet");
 }
 
-function refresh() {
-	fetch("/cgi-bin/claudewarmup?action=status")
-		.then(r => r.json())
-		.then(renderStatus)
-		.catch(() => { $("status").textContent = t("statusLoadError"); });
+let authKey = localStorage.getItem("cw_auth") || "";
+
+function showGate(errorMsg) {
+	$("app").style.display = "none";
+	$("gate").style.display = "block";
+	$("gate-error").textContent = errorMsg || "";
 }
+
+function showApp() {
+	$("gate").style.display = "none";
+	$("app").style.display = "block";
+}
+
+function apiCall(action, extraParams) {
+	const qs = `action=${action}${extraParams ? "&" + extraParams : ""}&auth=${encodeURIComponent(authKey)}`;
+	return fetch("/cgi-bin/claudewarmup?" + qs).then(r => {
+		if (r.status === 403) {
+			localStorage.removeItem("cw_auth");
+			authKey = "";
+			showGate(t("gateWrong"));
+			return Promise.reject(new Error("unauthorized"));
+		}
+		return r.json();
+	});
+}
+
+function refresh() {
+	apiCall("status")
+		.then(s => { showApp(); renderStatus(s); })
+		.catch(() => {});
+}
+
+$("gate-submit").addEventListener("click", () => {
+	authKey = $("gate-pw").value;
+	apiCall("status")
+		.then(s => {
+			localStorage.setItem("cw_auth", authKey);
+			showApp();
+			renderStatus(s);
+		})
+		.catch(() => {});
+});
+
+$("gate-pw").addEventListener("keydown", (ev) => {
+	if (ev.key === "Enter") $("gate-submit").click();
+});
 
 $("save").addEventListener("click", () => {
 	const mode = document.querySelector('input[name=mode]:checked').value;
 	const [h, m] = $("fixed-time").value.split(":");
 	const enabled = $("enabled").checked ? 1 : 0;
-	const qs = `action=set&mode=${mode}&hour=${parseInt(h,10)}&minute=${parseInt(m,10)}&enabled=${enabled}`;
-	fetch("/cgi-bin/claudewarmup?" + qs)
-		.then(r => r.json())
-		.then(s => { renderStatus(s); $("log").textContent = t("saved") + new Date().toLocaleTimeString(); });
+	apiCall("set", `mode=${mode}&hour=${parseInt(h,10)}&minute=${parseInt(m,10)}&enabled=${enabled}`)
+		.then(s => { renderStatus(s); $("log").textContent = t("saved") + new Date().toLocaleTimeString(); })
+		.catch(() => {});
 });
 
 $("trigger").addEventListener("click", () => {
 	$("log").textContent = t("sending");
-	fetch("/cgi-bin/claudewarmup?action=trigger")
-		.then(r => r.json())
-		.then(s => { renderStatus(s); $("log").textContent = t("triggered") + new Date().toLocaleTimeString(); });
+	apiCall("trigger")
+		.then(s => { renderStatus(s); $("log").textContent = t("triggered") + new Date().toLocaleTimeString(); })
+		.catch(() => {});
 });
 
 applyStaticI18n();
-refresh();
-setInterval(refresh, 15000);
+if (authKey) {
+	refresh();
+} else {
+	showGate();
+}
+setInterval(() => { if (authKey) refresh(); }, 15000);
 </script>
 </body>
 </html>

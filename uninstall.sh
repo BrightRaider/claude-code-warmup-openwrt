@@ -15,11 +15,11 @@ rm -f /usr/share/luci/menu.d/luci-app-claudewarmup.json
 rm -f /www/luci-static/resources/view/services/claudewarmup.js
 rm -f /etc/config/claudewarmup
 
-printf "Also delete /etc/claudewarmup (contains your OAuth token)? [y/N] "
+printf "Also delete /etc/claudewarmup (contains your OAuth token + page password)? [y/N] "
 read -r ans
 case "$ans" in
 	y|Y) rm -rf /etc/claudewarmup; echo "Removed." ;;
-	*) echo "Kept /etc/claudewarmup (token + logs)." ;;
+	*) echo "Kept /etc/claudewarmup (token + webauth + logs)." ;;
 esac
 
 echo "==> Done."

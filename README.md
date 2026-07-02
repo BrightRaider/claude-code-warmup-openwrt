@@ -58,7 +58,7 @@ Open `http://<router-ip>/claudewarmup/` (or LuCI → Services → Claude Warmup)
 
 ## Security note
 
-The web page at `/claudewarmup/` has **no separate login** — anyone on your LAN/Wi-Fi can open it and change the schedule or trigger a ping. They can't extract the token through it. If that's not acceptable for your network, put it behind your router's existing auth or restrict access via firewall rules.
+The web page at `/claudewarmup/` is protected by a **password generated during install**, printed at the end of `install.sh` and stored at `/etc/claudewarmup/webauth`. Anyone without it gets HTTP 403 from the backend, including read-only status. This matters if any less-trusted device (guest Wi-Fi, IoT, VPN clients) can reach your router's LAN-facing services — they can't see or change anything here without that password. It's a shared page-level secret, not a full user/session system; treat it like a simple gate, not a bank vault.
 
 ## Uninstall
 

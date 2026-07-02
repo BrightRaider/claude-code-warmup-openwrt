@@ -1,27 +1,41 @@
 #!/bin/sh
-echo "Content-Type: application/json"
-echo ""
+WEBAUTH_FILE=/etc/claudewarmup/webauth
+secret=""
+[ -s "$WEBAUTH_FILE" ] && secret=$(cat "$WEBAUTH_FILE")
 
 ACTION=""
 P_MODE=""
 P_HOUR=""
 P_MINUTE=""
 P_ENABLED=""
+P_AUTH=""
 
 old_ifs=$IFS
 IFS='&'
 for kv in $QUERY_STRING; do
-	key=${kv%%=*}
-	val=${kv#*=}
-	case "$key" in
-		action) ACTION="$val" ;;
-		mode) P_MODE="$val" ;;
-		hour) P_HOUR="$val" ;;
-		minute) P_MINUTE="$val" ;;
-		enabled) P_ENABLED="$val" ;;
+	qk=${kv%%=*}
+	qv=${kv#*=}
+	case "$qk" in
+		action) ACTION="$qv" ;;
+		mode) P_MODE="$qv" ;;
+		hour) P_HOUR="$qv" ;;
+		minute) P_MINUTE="$qv" ;;
+		enabled) P_ENABLED="$qv" ;;
+		auth) P_AUTH="$qv" ;;
 	esac
 done
 IFS=$old_ifs
+
+if [ -n "$secret" ] && [ "$P_AUTH" != "$secret" ]; then
+	echo "Status: 403 Forbidden"
+	echo "Content-Type: application/json"
+	echo ""
+	echo '{"error":"unauthorized"}'
+	exit 0
+fi
+
+echo "Content-Type: application/json"
+echo ""
 
 case "$ACTION" in
 	status)
