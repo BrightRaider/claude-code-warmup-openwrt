@@ -58,7 +58,9 @@ Open `http://<router-ip>/claudewarmup/` (or LuCI → Services → Claude Warmup)
 
 ## Security note
 
-The web page at `/claudewarmup/` is protected by a **password generated during install**, printed at the end of `install.sh` and stored at `/etc/claudewarmup/webauth`. Anyone without it gets HTTP 403 from the backend, including read-only status. This matters if any less-trusted device (guest Wi-Fi, IoT, VPN clients) can reach your router's LAN-facing services — they can't see or change anything here without that password. It's a shared page-level secret, not a full user/session system; treat it like a simple gate, not a bank vault.
+The web page at `/claudewarmup/` is **open by default** — no password. Worst case if an untrusted device on your network (guest Wi-Fi, IoT, VPN clients) finds it: it can flip the mode, change the schedule, or fire a manual ping. It cannot read your OAuth token or use your subscription beyond that fixed tiny message — there's no account/security compromise, just possible annoyance.
+
+If that's not acceptable on your network, open the page's **Access protection** section and set your own password there, any time — no reinstall needed. It's a shared page-level secret (stored at `/etc/claudewarmup/webauth`), not a full user/session system. Forgot it? Delete the file over SSH (`rm /etc/claudewarmup/webauth`) to reopen the page.
 
 ## Uninstall
 

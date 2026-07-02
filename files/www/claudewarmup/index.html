@@ -29,7 +29,7 @@
 	.bar-fill.crit { background: #e74c3c; }
 	.res-row { display: flex; justify-content: space-between; font-size: .9rem; margin-top: .8rem; }
 	.res-row:first-child { margin-top: 0; }
-	#gate input[type=password] { font-size: 1rem; padding: .5rem; width: 100%; box-sizing: border-box; margin-bottom: .6rem; }
+	input[type=password] { font-size: 1rem; padding: .5rem; width: 100%; box-sizing: border-box; margin-bottom: .6rem; }
 	#gate-error { color: #e74c3c; font-size: .85rem; min-height: 1.2em; }
 </style>
 </head>
@@ -43,7 +43,7 @@
 	</div>
 	<p class="muted" data-i18n="intro"></p>
 
-	<fieldset id="gate">
+	<fieldset id="gate" style="display:none">
 		<legend data-i18n="gateTitle"></legend>
 		<p class="muted" data-i18n="gateHint"></p>
 		<input type="password" id="gate-pw" autocomplete="current-password">
@@ -81,6 +81,16 @@
 		</div>
 
 		<p class="muted" id="log"></p>
+
+		<fieldset>
+			<legend data-i18n="secTitle"></legend>
+			<p class="muted" id="sec-state"></p>
+			<input type="password" id="sec-newpw" autocomplete="new-password">
+			<div class="row">
+				<button class="action primary" id="sec-set" data-i18n="secSetBtn"></button>
+				<button class="action" id="sec-remove" data-i18n="secRemoveBtn" style="display:none"></button>
+			</div>
+		</fieldset>
 	</div>
 
 <script>
@@ -114,9 +124,17 @@ const translations = {
 		triggered: "Manuell ausgelöst ",
 		locale: "de-DE",
 		gateTitle: "Zugang",
-		gateHint: "Diese Seite ist mit einem Passwort geschützt (aus der Installation, siehe SSH-Ausgabe).",
+		gateHint: "Diese Seite ist mit einem Passwort geschützt.",
 		gateSubmit: "Entsperren",
-		gateWrong: "Falsches Passwort."
+		gateWrong: "Falsches Passwort.",
+		secTitle: "Zugriffsschutz",
+		secOff: "Kein Passwort gesetzt — jeder im Netzwerk kann diese Seite öffnen und Einstellungen ändern.",
+		secOn: "Passwortschutz aktiv.",
+		secNewPwPlaceholder: "Neues Passwort (leer = kein Schutz)",
+		secSetBtn: "Setzen",
+		secRemoveBtn: "Schutz entfernen",
+		secSetOk: "Passwort gesetzt.",
+		secRemoveOk: "Schutz entfernt."
 	},
 	en: {
 		intro: "Keeps your Claude subscription's rolling 5h usage window warm, via the official long-lived token (claude setup-token).",
@@ -145,9 +163,17 @@ const translations = {
 		triggered: "Triggered manually ",
 		locale: "en-US",
 		gateTitle: "Access",
-		gateHint: "This page is password-protected (from the install output over SSH).",
+		gateHint: "This page is password-protected.",
 		gateSubmit: "Unlock",
-		gateWrong: "Wrong password."
+		gateWrong: "Wrong password.",
+		secTitle: "Access protection",
+		secOff: "No password set — anyone on the network can open this page and change settings.",
+		secOn: "Password protection active.",
+		secNewPwPlaceholder: "New password (empty = no protection)",
+		secSetBtn: "Set",
+		secRemoveBtn: "Remove protection",
+		secSetOk: "Password set.",
+		secRemoveOk: "Protection removed."
 	}
 };
 
@@ -228,6 +254,9 @@ function renderStatus(s) {
 	$("res-7d-bar").style.width = pct7d + "%";
 	$("res-7d-bar").className = barClass(pct7d);
 	$("res-7d-end").textContent = s.window7d_end ? t("resetLabel") + fmtClock(s.window7d_end) : t("noPingYet");
+
+	$("sec-state").textContent = s.protected ? t("secOn") : t("secOff");
+	$("sec-remove").style.display = s.protected ? "inline-block" : "none";
 }
 
 let authKey = localStorage.getItem("cw_auth") || "";
@@ -293,13 +322,34 @@ $("trigger").addEventListener("click", () => {
 		.catch(() => {});
 });
 
+$("sec-set").addEventListener("click", () => {
+	const pw = $("sec-newpw").value;
+	if (!pw) return;
+	apiCall("setpw", `newpw=${encodeURIComponent(pw)}`)
+		.then(s => {
+			authKey = pw;
+			localStorage.setItem("cw_auth", authKey);
+			renderStatus(s);
+			$("sec-newpw").value = "";
+			$("log").textContent = t("secSetOk");
+		})
+		.catch(() => {});
+});
+
+$("sec-remove").addEventListener("click", () => {
+	apiCall("setpw", "newpw=")
+		.then(s => {
+			authKey = "";
+			localStorage.removeItem("cw_auth");
+			renderStatus(s);
+			$("log").textContent = t("secRemoveOk");
+		})
+		.catch(() => {});
+});
+
 applyStaticI18n();
-if (authKey) {
-	refresh();
-} else {
-	showGate();
-}
-setInterval(() => { if (authKey) refresh(); }, 15000);
+refresh();
+setInterval(refresh, 15000);
 </script>
 </body>
 </html>

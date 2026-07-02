@@ -9,6 +9,7 @@ P_HOUR=""
 P_MINUTE=""
 P_ENABLED=""
 P_AUTH=""
+P_NEWPW=""
 
 old_ifs=$IFS
 IFS='&'
@@ -22,6 +23,7 @@ for kv in $QUERY_STRING; do
 		minute) P_MINUTE="$qv" ;;
 		enabled) P_ENABLED="$qv" ;;
 		auth) P_AUTH="$qv" ;;
+		newpw) P_NEWPW="$qv" ;;
 	esac
 done
 IFS=$old_ifs
@@ -37,9 +39,16 @@ fi
 echo "Content-Type: application/json"
 echo ""
 
+status_with_protected() {
+	out=$(/usr/bin/claude-warmup.sh status)
+	protected=false
+	[ -s "$WEBAUTH_FILE" ] && protected=true
+	printf '%s,"protected":%s}\n' "${out%\}}" "$protected"
+}
+
 case "$ACTION" in
 	status)
-		/usr/bin/claude-warmup.sh status
+		status_with_protected
 		;;
 	set)
 		case "$P_MODE" in
@@ -56,11 +65,21 @@ case "$ACTION" in
 		esac
 		uci commit claudewarmup
 		/usr/bin/claude-warmup.sh apply
-		/usr/bin/claude-warmup.sh status
+		status_with_protected
 		;;
 	trigger)
 		/usr/bin/claude-warmup.sh fire
-		/usr/bin/claude-warmup.sh status
+		status_with_protected
+		;;
+	setpw)
+		umask 077
+		if [ -z "$P_NEWPW" ]; then
+			rm -f "$WEBAUTH_FILE"
+		else
+			printf '%s' "$P_NEWPW" > "$WEBAUTH_FILE"
+			chmod 600 "$WEBAUTH_FILE"
+		fi
+		status_with_protected
 		;;
 	*)
 		echo '{"error":"unknown action"}'
