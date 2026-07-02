@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Warmup</title>
+<style>
+	:root { color-scheme: light dark; }
+	body { font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; }
+	h1 { font-size: 1.3rem; }
+	fieldset { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+	legend { padding: 0 .5rem; font-weight: 600; }
+	label { display: flex; align-items: center; gap: .5rem; margin-bottom: .6rem; }
+	input[type=time] { font-size: 1rem; padding: .2rem; }
+	button { font-size: 1rem; padding: .5rem 1rem; border-radius: 6px; border: 1px solid #8884; cursor: pointer; }
+	button.primary { background: #6c47ff; color: #fff; border: none; }
+	#status { padding: .8rem; border-radius: 8px; background: #8881; margin-bottom: 1rem; font-size: .95rem; }
+	#status.active { background: #2ecc7133; }
+	#status.expired { background: #e67e2233; }
+	.row { display: flex; gap: .6rem; }
+	.muted { opacity: .65; font-size: .85rem; }
+</style>
+</head>
+<body>
+	<h1>⚡ Claude Warmup</h1>
+	<p class="muted">Hält das rollierende 5h-Nutzungsfenster deines Claude-Abos aktiv, per offiziellem Long-Lived-Token (<code>claude setup-token</code>).</p>
+
+	<div id="status">Lade Status…</div>
+
+	<fieldset>
+		<legend>Modus</legend>
+		<label><input type="checkbox" id="enabled"> Aktiv</label>
+		<label><input type="radio" name="mode" value="keepwarm" id="mode-keepwarm"> Durchgehend warmhalten (empfohlen)</label>
+		<label><input type="radio" name="mode" value="fixed" id="mode-fixed"> Feste Uhrzeit täglich</label>
+		<div class="row" style="margin-left:1.6rem">
+			<input type="time" id="fixed-time" value="00:01">
+		</div>
+	</fieldset>
+
+	<div class="row">
+		<button class="primary" id="save">Speichern</button>
+		<button id="trigger">Jetzt sofort pingen</button>
+	</div>
+
+	<p class="muted" id="log"></p>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function fmt(sec) {
+	if (sec <= 0) return "0:00:00";
+	const h = Math.floor(sec / 3600);
+	const m = Math.floor((sec % 3600) / 60);
+	const s = sec % 60;
+	return h + ":" + String(m).padStart(2,'0') + ":" + String(s).padStart(2,'0');
+}
+
+function renderStatus(s) {
+	const el = $("status");
+	if (!s.enabled) {
+		el.className = "";
+		el.textContent = "⏸ Deaktiviert.";
+	} else if (s.active) {
+		el.className = "active";
+		el.textContent = "✅ Fenster aktiv — läuft ab in " + fmt(s.remaining_seconds);
+	} else {
+		el.className = "expired";
+		el.textContent = s.mode === "keepwarm"
+			? "⏳ Fenster abgelaufen — wird beim nächsten Check (max. 5 Min) automatisch neu gestartet."
+			: "⏳ Fenster abgelaufen — nächster Start um " + String(s.fixed_hour).padStart(2,'0') + ":" + String(s.fixed_minute).padStart(2,'0') + " Uhr.";
+	}
+	$("enabled").checked = s.enabled;
+	$("mode-keepwarm").checked = s.mode === "keepwarm";
+	$("mode-fixed").checked = s.mode === "fixed";
+	$("fixed-time").value = String(s.fixed_hour).padStart(2,'0') + ":" + String(s.fixed_minute).padStart(2,'0');
+}
+
+function refresh() {
+	fetch("/cgi-bin/claudewarmup?action=status")
+		.then(r => r.json())
+		.then(renderStatus)
+		.catch(() => { $("status").textContent = "⚠ Status konnte nicht geladen werden."; });
+}
+
+$("save").addEventListener("click", () => {
+	const mode = document.querySelector('input[name=mode]:checked').value;
+	const [h, m] = $("fixed-time").value.split(":");
+	const enabled = $("enabled").checked ? 1 : 0;
+	const qs = `action=set&mode=${mode}&hour=${parseInt(h,10)}&minute=${parseInt(m,10)}&enabled=${enabled}`;
+	fetch("/cgi-bin/claudewarmup?" + qs)
+		.then(r => r.json())
+		.then(s => { renderStatus(s); $("log").textContent = "Gespeichert " + new Date().toLocaleTimeString(); });
+});
+
+$("trigger").addEventListener("click", () => {
+	$("log").textContent = "Sende Ping…";
+	fetch("/cgi-bin/claudewarmup?action=trigger")
+		.then(r => r.json())
+		.then(s => { renderStatus(s); $("log").textContent = "Manuell ausgelöst " + new Date().toLocaleTimeString(); });
+});
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

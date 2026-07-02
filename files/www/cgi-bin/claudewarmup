@@ -1,0 +1,54 @@
+#!/bin/sh
+echo "Content-Type: application/json"
+echo ""
+
+ACTION=""
+P_MODE=""
+P_HOUR=""
+P_MINUTE=""
+P_ENABLED=""
+
+old_ifs=$IFS
+IFS='&'
+for kv in $QUERY_STRING; do
+	key=${kv%%=*}
+	val=${kv#*=}
+	case "$key" in
+		action) ACTION="$val" ;;
+		mode) P_MODE="$val" ;;
+		hour) P_HOUR="$val" ;;
+		minute) P_MINUTE="$val" ;;
+		enabled) P_ENABLED="$val" ;;
+	esac
+done
+IFS=$old_ifs
+
+case "$ACTION" in
+	status)
+		/usr/bin/claude-warmup.sh status
+		;;
+	set)
+		case "$P_MODE" in
+			keepwarm|fixed) uci set claudewarmup.settings.mode="$P_MODE" ;;
+		esac
+		case "$P_HOUR" in
+			[0-9]|[0-1][0-9]|2[0-3]) uci set claudewarmup.settings.fixed_hour="$P_HOUR" ;;
+		esac
+		case "$P_MINUTE" in
+			[0-9]|[0-5][0-9]) uci set claudewarmup.settings.fixed_minute="$P_MINUTE" ;;
+		esac
+		case "$P_ENABLED" in
+			0|1) uci set claudewarmup.settings.enabled="$P_ENABLED" ;;
+		esac
+		uci commit claudewarmup
+		/usr/bin/claude-warmup.sh apply
+		/usr/bin/claude-warmup.sh status
+		;;
+	trigger)
+		/usr/bin/claude-warmup.sh fire
+		/usr/bin/claude-warmup.sh status
+		;;
+	*)
+		echo '{"error":"unknown action"}'
+		;;
+esac
