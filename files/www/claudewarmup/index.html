@@ -12,6 +12,9 @@
 	.lang-switch { display: flex; gap: .3rem; }
 	.lang-switch button { font-size: 1.3rem; padding: .1rem .3rem; border-radius: 6px; border: 1px solid transparent; background: none; cursor: pointer; opacity: .45; line-height: 1; }
 	.lang-switch button.active { opacity: 1; border-color: #8884; }
+	.icon-btn { font-size: 1.2rem; padding: .1rem .4rem; border-radius: 6px; border: 1px solid transparent; background: none; cursor: pointer; opacity: .7; line-height: 1; }
+	.icon-btn:hover { opacity: 1; border-color: #8884; }
+	.icon-btn.on { opacity: 1; }
 	fieldset { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
 	legend { padding: 0 .5rem; font-weight: 600; }
 	label { display: flex; align-items: center; gap: .5rem; margin-bottom: .6rem; }
@@ -37,6 +40,7 @@
 	<div class="header-row">
 		<h1>⚡ Claude Warmup</h1>
 		<div class="lang-switch">
+			<button class="icon-btn" id="lock-btn" title="">🔓</button>
 			<button id="lang-de" title="Deutsch">🇩🇪</button>
 			<button id="lang-en" title="English">🇬🇧</button>
 		</div>
@@ -82,7 +86,7 @@
 
 		<p class="muted" id="log"></p>
 
-		<fieldset>
+		<fieldset id="sec-panel" style="display:none">
 			<legend data-i18n="secTitle"></legend>
 			<p class="muted" id="sec-state"></p>
 			<input type="password" id="sec-newpw" autocomplete="new-password">
@@ -257,6 +261,14 @@ function renderStatus(s) {
 
 	$("sec-state").textContent = s.protected ? t("secOn") : t("secOff");
 	$("sec-remove").style.display = s.protected ? "inline-block" : "none";
+	$("lock-btn").textContent = s.protected ? "🔒" : "🔓";
+	$("lock-btn").className = "icon-btn" + (s.protected ? " on" : "");
+	$("lock-btn").title = t("secTitle");
+}
+
+function toggleSecPanel() {
+	const panel = $("sec-panel");
+	panel.style.display = panel.style.display === "none" ? "block" : "none";
 }
 
 let authKey = localStorage.getItem("cw_auth") || "";
@@ -322,6 +334,8 @@ $("trigger").addEventListener("click", () => {
 		.catch(() => {});
 });
 
+$("lock-btn").addEventListener("click", toggleSecPanel);
+
 $("sec-set").addEventListener("click", () => {
 	const pw = $("sec-newpw").value;
 	if (!pw) return;
@@ -332,6 +346,7 @@ $("sec-set").addEventListener("click", () => {
 			renderStatus(s);
 			$("sec-newpw").value = "";
 			$("log").textContent = t("secSetOk");
+			toggleSecPanel();
 		})
 		.catch(() => {});
 });
@@ -343,6 +358,7 @@ $("sec-remove").addEventListener("click", () => {
 			localStorage.removeItem("cw_auth");
 			renderStatus(s);
 			$("log").textContent = t("secRemoveOk");
+			toggleSecPanel();
 		})
 		.catch(() => {});
 });
