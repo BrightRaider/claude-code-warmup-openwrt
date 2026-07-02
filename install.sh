@@ -7,6 +7,12 @@ BASE="https://raw.githubusercontent.com/$REPO/main/files"
 
 echo "==> Installing Claude Warmup"
 
+if ! command -v curl >/dev/null 2>&1; then
+	echo "==> Installing curl (needed to read the real rate-limit reset time)"
+	apk update
+	apk add curl
+fi
+
 mkdir -p /etc/claudewarmup /www/claudewarmup /www/luci-static/resources/view/services
 
 if [ ! -s /etc/claudewarmup/token ]; then

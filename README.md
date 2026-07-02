@@ -13,14 +13,15 @@ Claude's usage limit is a **rolling 5-hour window** that starts on your *first* 
 1. Runs entirely on the router (tested on a Xiaomi AX3600, aarch64, OpenWrt 25.12 — should work on any OpenWrt device with enough flash/RAM for a ~5KB shell script).
 2. Uses the **official** `claude setup-token` command to generate a long-lived OAuth token scoped to `user:inference` only — the same mechanism Anthropic documents for CI/headless use (e.g. GitHub Actions). This is *not* a scraped session token or a spoofed client.
 3. A cron job on the router periodically (or at a fixed time) sends a minimal `POST` to `api.anthropic.com/v1/messages` using that token, authenticating against your subscription's usage window.
-4. Two modes:
+4. The response carries real rate-limit headers (`anthropic-ratelimit-unified-5h-reset`, `-utilization`) with the **actual server-side window reset time** — this is what's tracked and displayed, not a local guess. That matters because the window can already be running from other usage (Claude Code, claude.ai, mobile app) before this tool ever pings; a purely local "last ping + 5h" estimate would be wrong in that case. Reading the header keeps it accurate. This requires `curl` (installed automatically) since the router's built-in `wget` can't read response headers.
+5. Two modes:
    - **Keep warm** (default): checks every 5 minutes, refires the instant the previous window has expired — your window is effectively always fresh.
    - **Fixed time**: fires once daily at a time you choose (00:00–23:59), e.g. right after midnight so your window has reset by the time you sit down to work.
 5. A small web UI on the router lets you switch modes and pick the time, and shows how much of the current window is left. It's also linked from LuCI under **Services → Claude Warmup**.
 
 ## Requirements
 
-- OpenWrt router with `wget` (uclient-fetch, standard) and cron (`/etc/init.d/cron`) — both present on stock OpenWrt.
+- OpenWrt router with `apk` (25.12+) and cron (`/etc/init.d/cron`) — both present on stock OpenWrt. The installer pulls in `curl` (~500KB) automatically.
 - A Claude Pro or Max subscription.
 - Claude Code installed on any PC, just once, to generate the token.
 

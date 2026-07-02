@@ -9,6 +9,7 @@ MODEL="claude-haiku-4-5-20251001"
 
 TOKEN_FILE=$(uci -q get $CONF.settings.token_file); TOKEN_FILE=${TOKEN_FILE:-/etc/claudewarmup/token}
 STATE_FILE=$(uci -q get $CONF.settings.state_file); STATE_FILE=${STATE_FILE:-/etc/claudewarmup/state}
+LASTFIRE_FILE="${STATE_FILE}.last_fire"
 LOG_FILE=$(uci -q get $CONF.settings.log_file); LOG_FILE=${LOG_FILE:-/etc/claudewarmup/warmup.log}
 MESSAGE=$(uci -q get $CONF.settings.message); MESSAGE=${MESSAGE:-"Automated warm-up ping to reset the Claude 5h usage window. Reply with a short acknowledgement."}
 
@@ -25,23 +26,43 @@ fire() {
 	fi
 	token=$(cat "$TOKEN_FILE")
 	body="{\"model\":\"$MODEL\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"$MESSAGE\"}]}"
-	out=$(wget -q -O - \
-		--header="Content-Type: application/json" \
-		--header="anthropic-version: 2023-06-01" \
-		--header="anthropic-beta: claude-code-20250219,oauth-2025-04-20" \
-		--header="Authorization: Bearer $token" \
-		--post-data="$body" \
-		--timeout=20 \
-		"https://api.anthropic.com/v1/messages" 2>&1)
-	rc=$?
-	if [ $rc -eq 0 ]; then
-		date +%s > "$STATE_FILE"
-		log "OK: warmup sent"
-		return 0
-	else
-		log "ERROR: warmup request failed (rc=$rc): $out"
+
+	hdrfile=$(mktemp)
+	http_code=$(curl -sS -o /dev/null -D "$hdrfile" -w '%{http_code}' \
+		-H "Content-Type: application/json" \
+		-H "anthropic-version: 2023-06-01" \
+		-H "anthropic-beta: claude-code-20250219,oauth-2025-04-20" \
+		-H "Authorization: Bearer $token" \
+		-d "$body" \
+		--max-time 20 \
+		"https://api.anthropic.com/v1/messages" 2>>"$LOG_FILE")
+	curl_rc=$?
+
+	date +%s > "$LASTFIRE_FILE"
+
+	if [ $curl_rc -ne 0 ]; then
+		rm -f "$hdrfile"
+		log "ERROR: curl failed (rc=$curl_rc)"
 		return 1
 	fi
+
+	if [ "$http_code" != "200" ]; then
+		log "ERROR: warmup request failed (http=$http_code)"
+		rm -f "$hdrfile"
+		return 1
+	fi
+
+	reset=$(tr -d '\r' < "$hdrfile" | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-5h-reset"{print $2}')
+	util=$(tr -d '\r' < "$hdrfile" | awk -F': ' 'tolower($1)=="anthropic-ratelimit-unified-5h-utilization"{print $2}')
+	rm -f "$hdrfile"
+
+	if [ -n "$reset" ]; then
+		echo "${reset}:${util:-0}" > "$STATE_FILE"
+		log "OK: warmup sent, real window reset=$reset utilization=$util"
+	else
+		log "WARN: warmup sent but no rate-limit header found in response"
+	fi
+	return 0
 }
 
 do_check() {
@@ -55,11 +76,10 @@ do_check() {
 		return $?
 	fi
 
-	last=0
-	[ -s "$STATE_FILE" ] && last=$(cat "$STATE_FILE")
+	reset=0
+	[ -s "$STATE_FILE" ] && reset=$(cut -d: -f1 "$STATE_FILE")
 	now=$(date +%s)
-	elapsed=$((now - last))
-	if [ "$last" -eq 0 ] || [ "$elapsed" -ge "$WINDOW_SECONDS" ]; then
+	if [ "$reset" -eq 0 ] || [ "$now" -ge "$reset" ]; then
 		fire
 	fi
 }
@@ -70,22 +90,27 @@ do_status() {
 	fixed_hour=$(uci -q get $CONF.settings.fixed_hour); fixed_hour=${fixed_hour:-0}
 	fixed_minute=$(uci -q get $CONF.settings.fixed_minute); fixed_minute=${fixed_minute:-1}
 
-	last=0
-	[ -s "$STATE_FILE" ] && last=$(cat "$STATE_FILE")
+	reset=0
+	util=0
+	if [ -s "$STATE_FILE" ]; then
+		reset=$(cut -d: -f1 "$STATE_FILE")
+		util=$(cut -d: -f2 "$STATE_FILE")
+	fi
+	last_fire=0
+	[ -s "$LASTFIRE_FILE" ] && last_fire=$(cat "$LASTFIRE_FILE")
+
 	now=$(date +%s)
-	if [ "$last" -gt 0 ]; then
-		end=$((last + WINDOW_SECONDS))
-		remaining=$((end - now))
+	if [ "$reset" -gt 0 ]; then
+		remaining=$((reset - now))
 		[ "$remaining" -lt 0 ] && remaining=0
 	else
-		end=0
 		remaining=0
 	fi
 	if [ "$remaining" -gt 0 ]; then active=true; else active=false; fi
 	if [ "$enabled" = "1" ]; then en=true; else en=false; fi
 
-	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"remaining_seconds":%s,"active":%s,"now":%s}\n' \
-		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last" "$end" "$remaining" "$active" "$now"
+	printf '{"enabled":%s,"mode":"%s","fixed_hour":%s,"fixed_minute":%s,"last_fire":%s,"window_end":%s,"utilization":%s,"remaining_seconds":%s,"active":%s,"now":%s}\n' \
+		"$en" "$mode" "$fixed_hour" "$fixed_minute" "$last_fire" "$reset" "${util:-0}" "$remaining" "$active" "$now"
 }
 
 apply_cron() {

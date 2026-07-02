@@ -62,7 +62,8 @@ function renderStatus(s) {
 		el.textContent = "⏸ Deaktiviert.";
 	} else if (s.active) {
 		el.className = "active";
-		el.textContent = "✅ Fenster aktiv — läuft ab in " + fmt(s.remaining_seconds);
+		const pct = Math.round((s.utilization || 0) * 100);
+		el.textContent = "✅ Fenster aktiv — läuft ab in " + fmt(s.remaining_seconds) + " (" + pct + "% genutzt)";
 	} else {
 		el.className = "expired";
 		el.textContent = s.mode === "keepwarm"
