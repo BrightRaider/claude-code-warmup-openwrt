@@ -19,7 +19,7 @@ MESSAGE=$(uci -q get $CONF.settings.message); MESSAGE=${MESSAGE:-"Automated warm
 FAIL_THRESHOLD=3
 
 log() {
-	ts=$(date '+%Y-%m-%d %H:%M:%S')
+	ts=$(date +%s)
 	echo "$ts $1" >> "$LOG_FILE"
 	tail -n 200 "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE"
 }

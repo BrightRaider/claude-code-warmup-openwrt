@@ -254,15 +254,25 @@ function barClass(pct) {
 	return "bar-fill";
 }
 
-function renderStatus(s) {
+let serverClockOffset = 0;
+
+function serverNow() {
+	return Date.now() / 1000 + serverClockOffset;
+}
+
+function renderStatus(s, skipOffsetUpdate) {
 	lastStatus = s;
+	if (!skipOffsetUpdate) {
+		serverClockOffset = s.now - Date.now() / 1000;
+	}
 	const el = $("status");
 	if (!s.enabled) {
 		el.className = "";
 		el.textContent = t("disabled");
 	} else if (s.active) {
 		el.className = "active";
-		el.textContent = t("active") + fmt(s.remaining_seconds);
+		const liveRemaining = Math.max(0, Math.round(s.window_end - serverNow()));
+		el.textContent = t("active") + fmt(liveRemaining);
 	} else {
 		el.className = "expired";
 		let pastStartToday = true;
@@ -327,13 +337,21 @@ function toggleSecPanel() {
 	panel.style.display = panel.style.display === "none" ? "block" : "none";
 }
 
+function localizeLogTimestamps(text) {
+	return text.replace(/^(\d{9,})( .*)$/gm, (match, epoch, rest) => {
+		const d = new Date(parseInt(epoch, 10) * 1000);
+		if (isNaN(d)) return match;
+		return d.toLocaleString(t("locale"), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + rest;
+	});
+}
+
 function toggleLogPanel() {
 	const panel = $("log-panel");
 	const opening = panel.style.display === "none";
 	panel.style.display = opening ? "block" : "none";
 	if (opening) {
 		apiCall("log")
-			.then(r => { $("log-content").textContent = r.log || ""; })
+			.then(r => { $("log-content").textContent = localizeLogTimestamps(r.log || ""); })
 			.catch(() => {});
 	}
 }
@@ -442,6 +460,7 @@ $("sec-remove").addEventListener("click", () => {
 applyStaticI18n();
 refresh();
 setInterval(refresh, 15000);
+setInterval(() => { if (lastStatus) renderStatus(lastStatus, true); }, 1000);
 </script>
 </body>
 </html>
