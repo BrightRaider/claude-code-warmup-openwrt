@@ -107,15 +107,20 @@ do_check() {
 	[ "$enabled" = "1" ] || return 0
 
 	mode=$(uci -q get $CONF.settings.mode); mode=${mode:-keepwarm}
+	now=$(date +%s)
 
 	if [ "$mode" = "fixed" ]; then
-		fire
-		return $?
+		fixed_hour=$(uci -q get $CONF.settings.fixed_hour); fixed_hour=${fixed_hour:-0}
+		fixed_minute=$(uci -q get $CONF.settings.fixed_minute); fixed_minute=${fixed_minute:-1}
+		today=$(date +%Y-%m-%d)
+		today_start=$(date -d "$today $fixed_hour:$fixed_minute" +%s 2>/dev/null)
+		if [ -n "$today_start" ] && [ "$now" -lt "$today_start" ]; then
+			return 0
+		fi
 	fi
 
 	reset=0
 	[ -s "$STATE_FILE" ] && reset=$(cut -d: -f1 "$STATE_FILE")
-	now=$(date +%s)
 	if [ "$reset" -eq 0 ] || [ "$now" -ge "$reset" ]; then
 		fire
 	fi
@@ -201,11 +206,7 @@ apply_cron() {
 	{
 		cat "$CRONTAB.tmp"
 		echo "# BEGIN claudewarmup"
-		if [ "$mode" = "fixed" ]; then
-			echo "$fixed_minute $fixed_hour * * * /usr/bin/claude-warmup.sh check"
-		else
-			echo "*/5 * * * * /usr/bin/claude-warmup.sh check"
-		fi
+		echo "*/5 * * * * /usr/bin/claude-warmup.sh check"
 		echo "# END claudewarmup"
 	} > "$CRONTAB.new"
 

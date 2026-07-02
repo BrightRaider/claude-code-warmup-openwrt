@@ -9,7 +9,7 @@ Not affiliated with Anthropic. Community tool, MIT licensed.
 ## Features
 
 - **Real window tracking** — reads Anthropic's own rate-limit response headers, not a local guess, so it stays accurate even if the window was actually started by other usage (Claude Code, claude.ai, mobile app) before this tool ever pinged.
-- **Two scheduling modes** — keep the window continuously warm (checks every 5 min, refires the instant it expires), or fire once daily at a fixed time you pick (00:00–23:59).
+- **Two scheduling modes** — keep the window continuously warm around the clock, or stay quiet until a fixed time you pick (00:00–23:59) and then keep it continuously warm for the rest of that day, going quiet again overnight before the next day's start time.
 - **5h + 7-day usage bars** — utilization and reset time for both subscription limits, at a glance.
 - **Token validity tracking** — enter your token's issue date once, get a running countdown to its 1-year expiry.
 - **Error detection** — the status box turns red immediately on an invalid/expired/revoked token; other failures (e.g. a network blip) only alarm after 3 in a row, so a single transient hiccup doesn't false-alarm. A built-in log viewer (📄) shows the last 100 lines.
@@ -30,7 +30,7 @@ Claude's usage limit is a **rolling 5-hour window** that starts on your *first* 
 4. The response carries real rate-limit headers (`anthropic-ratelimit-unified-5h-reset`, `-utilization`) with the **actual server-side window reset time** — this is what's tracked and displayed, not a local guess. That matters because the window can already be running from other usage (Claude Code, claude.ai, mobile app) before this tool ever pings; a purely local "last ping + 5h" estimate would be wrong in that case. Reading the header keeps it accurate. This requires `curl` (installed automatically) since the router's built-in `wget` can't read response headers.
 5. Two modes:
    - **Keep warm** (default): checks every 5 minutes, refires the instant the previous window has expired — your window is effectively always fresh.
-   - **Fixed time**: fires once daily at a time you choose (00:00–23:59), e.g. right after midnight so your window has reset by the time you sit down to work.
+   - **Fixed time**: stays quiet until the time you choose (00:00–23:59), fires the first ping there, then behaves exactly like keep-warm for the rest of that day — going quiet again overnight once the last window before midnight naturally expires, until the next day's start time. Good if you don't want pings firing while you're asleep.
 5. A small web UI on the router lets you switch modes and pick the time, and shows how much of the current window is left. It also shows your **5h and 7-day usage** (percent utilized + reset time), since Pro/Max subscriptions are capped by both. It's linked from LuCI under **Services → Claude Warmup**.
 6. If pings start failing, the status box gets a **red border**. A token that's invalid/expired/revoked (HTTP 401/403) flags this immediately, since that never fixes itself. Other failures (e.g. a network blip) only flag after 3 in a row, so a single transient hiccup during keep-warm's 5-minute checks doesn't cause false alarms. A 📄 button in the header shows the last 100 log lines for troubleshooting.
 

@@ -126,7 +126,7 @@ const translations = {
 		modeTitle: "Modus",
 		enabledLabel: "Aktiv",
 		modeKeepwarm: "Durchgehend warmhalten (empfohlen)",
-		modeFixed: "Feste Uhrzeit täglich",
+		modeFixed: "Ab fester Uhrzeit warmhalten",
 		saveBtn: "Speichern",
 		triggerBtn: "Jetzt sofort pingen",
 		disabled: "⏸ Deaktiviert.",
@@ -172,7 +172,7 @@ const translations = {
 		modeTitle: "Mode",
 		enabledLabel: "Enabled",
 		modeKeepwarm: "Keep warm continuously (recommended)",
-		modeFixed: "Fixed time daily",
+		modeFixed: "Keep warm from a fixed time",
 		saveBtn: "Save",
 		triggerBtn: "Ping now",
 		disabled: "⏸ Disabled.",
@@ -265,7 +265,14 @@ function renderStatus(s) {
 		el.textContent = t("active") + fmt(s.remaining_seconds);
 	} else {
 		el.className = "expired";
-		el.textContent = s.mode === "keepwarm"
+		let pastStartToday = true;
+		if (s.mode === "fixed") {
+			const nowLocal = new Date();
+			const fixedToday = new Date(nowLocal);
+			fixedToday.setHours(s.fixed_hour, s.fixed_minute, 0, 0);
+			pastStartToday = nowLocal >= fixedToday;
+		}
+		el.textContent = (s.mode === "keepwarm" || pastStartToday)
 			? t("expiredKeepwarm")
 			: t("expiredFixed") + String(s.fixed_hour).padStart(2,'0') + ":" + String(s.fixed_minute).padStart(2,'0') + t("clockSuffix");
 	}
