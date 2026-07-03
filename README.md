@@ -94,6 +94,10 @@ This project only ever calls the API through a token minted by Anthropic's own `
 
 See [CHANGELOG.md](CHANGELOG.md).
 
+## Credits
+
+The core idea — using `claude setup-token` to send a scheduled warm-up ping — comes from [tappress/claude-code-warmup](https://github.com/tappress/claude-code-warmup), a Node/Vercel-based implementation. This project reworks that idea to run entirely on an OpenWrt router instead, with a different feature set (resource usage bars, token validity tracking, LuCI integration, web UI, and more).
+
 ## License
 
 MIT
