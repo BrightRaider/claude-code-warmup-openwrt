@@ -36,6 +36,9 @@
 	.res-row:first-child { margin-top: 0; }
 	input[type=password] { font-size: 1rem; padding: .5rem; width: 100%; box-sizing: border-box; margin-bottom: .6rem; }
 	#gate-error { color: #e74c3c; font-size: .85rem; min-height: 1.2em; }
+	#msg { min-height: 1.2em; padding: .3rem .5rem; border-radius: 6px; transition: background-color .3s, font-weight .3s; }
+	#msg.flash { background: #6c47ff33; font-weight: 600; opacity: 1; animation: msgFade 2.5s ease-out forwards; }
+	@keyframes msgFade { 0% { background: #6c47ff55; } 100% { background: transparent; } }
 </style>
 </head>
 <body>
@@ -139,7 +142,8 @@ const translations = {
 		noPingYet: "Noch kein Ping gesendet.",
 		resetLabel: "Reset: ",
 		statusLoadError: "⚠ Status konnte nicht geladen werden.",
-		saved: "Gespeichert ",
+		saved: "✓ Gespeichert ",
+		saving: "Speichere…",
 		sending: "Sende Ping…",
 		triggered: "Manuell ausgelöst ",
 		locale: "de-DE",
@@ -185,7 +189,8 @@ const translations = {
 		noPingYet: "No ping sent yet.",
 		resetLabel: "Resets: ",
 		statusLoadError: "⚠ Could not load status.",
-		saved: "Saved ",
+		saved: "✓ Saved ",
+		saving: "Saving…",
 		sending: "Sending ping…",
 		triggered: "Triggered manually ",
 		locale: "en-US",
@@ -277,11 +282,10 @@ function localToRouterTime(hour, minute, tzOffsetSeconds) {
 	return { hour: Math.floor(total / 60), minute: total % 60 };
 }
 
-function renderStatus(s, skipOffsetUpdate) {
-	lastStatus = s;
-	if (!skipOffsetUpdate) {
-		serverClockOffset = s.now - Date.now() / 1000;
-	}
+let formDirty = false;
+
+function updateStatusBox(s) {
+	if (!s) return;
 	const el = $("status");
 	if (!s.enabled) {
 		el.className = "";
@@ -312,11 +316,21 @@ function renderStatus(s, skipOffsetUpdate) {
 		el.className += " error";
 		el.textContent += " " + (s.error_reason === "unauthorized" ? t("errorUnauthorized") : t("errorGeneric"));
 	}
-	$("enabled").checked = s.enabled;
-	$("mode-keepwarm").checked = s.mode === "keepwarm";
-	$("mode-fixed").checked = s.mode === "fixed";
-	const displayFixed = routerToLocalTime(s.fixed_hour, s.fixed_minute, s.tz_offset_seconds);
-	$("fixed-time").value = String(displayFixed.hour).padStart(2,'0') + ":" + String(displayFixed.minute).padStart(2,'0');
+}
+
+function renderStatus(s, skipOffsetUpdate) {
+	lastStatus = s;
+	if (!skipOffsetUpdate) {
+		serverClockOffset = s.now - Date.now() / 1000;
+	}
+	updateStatusBox(s);
+	if (!formDirty) {
+		$("enabled").checked = s.enabled;
+		$("mode-keepwarm").checked = s.mode === "keepwarm";
+		$("mode-fixed").checked = s.mode === "fixed";
+		const displayFixed = routerToLocalTime(s.fixed_hour, s.fixed_minute, s.tz_offset_seconds);
+		$("fixed-time").value = String(displayFixed.hour).padStart(2,'0') + ":" + String(displayFixed.minute).padStart(2,'0');
+	}
 
 	const pct5h = Math.round((s.utilization || 0) * 100);
 	$("res-5h-pct").textContent = s.window_end ? pct5h + "%" : t("noData");
@@ -423,30 +437,47 @@ $("gate-pw").addEventListener("keydown", (ev) => {
 	if (ev.key === "Enter") $("gate-submit").click();
 });
 
+["enabled", "mode-keepwarm", "mode-fixed", "fixed-time"].forEach(id => {
+	$(id).addEventListener("input", () => { formDirty = true; });
+});
+
+function flashMessage(text) {
+	const msg = $("msg");
+	msg.textContent = text;
+	msg.classList.remove("flash");
+	void msg.offsetWidth;
+	msg.classList.add("flash");
+}
+
 $("save").addEventListener("click", () => {
 	const mode = document.querySelector('input[name=mode]:checked').value;
 	const [lh, lm] = $("fixed-time").value.split(":").map(Number);
 	const tzOffset = lastStatus ? lastStatus.tz_offset_seconds : 0;
 	const routerTime = localToRouterTime(lh, lm, tzOffset);
 	const enabled = $("enabled").checked ? 1 : 0;
+	flashMessage(t("saving"));
 	apiCall("set", `mode=${mode}&hour=${routerTime.hour}&minute=${routerTime.minute}&enabled=${enabled}`)
-		.then(s => { renderStatus(s); $("msg").textContent = t("saved") + new Date().toLocaleTimeString(); })
-		.catch(() => {});
+		.then(s => {
+			formDirty = false;
+			renderStatus(s);
+			flashMessage(t("saved") + new Date().toLocaleTimeString());
+		})
+		.catch(() => { flashMessage(t("statusLoadError")); });
 });
 
 $("trigger").addEventListener("click", () => {
-	$("msg").textContent = t("sending");
+	flashMessage(t("sending"));
 	apiCall("trigger")
-		.then(s => { renderStatus(s); $("msg").textContent = t("triggered") + new Date().toLocaleTimeString(); })
-		.catch(() => {});
+		.then(s => { renderStatus(s); flashMessage(t("triggered") + new Date().toLocaleTimeString()); })
+		.catch(() => { flashMessage(t("statusLoadError")); });
 });
 
 $("token-date-set").addEventListener("click", () => {
 	const d = $("token-date-input").value;
 	if (!d) return;
 	apiCall("settoken", `date=${d}`)
-		.then(s => { renderStatus(s); $("msg").textContent = t("tokenSetOk"); })
-		.catch(() => {});
+		.then(s => { renderStatus(s); flashMessage(t("tokenSetOk")); })
+		.catch(() => { flashMessage(t("statusLoadError")); });
 });
 
 $("lock-btn").addEventListener("click", toggleSecPanel);
@@ -461,10 +492,10 @@ $("sec-set").addEventListener("click", () => {
 			localStorage.setItem("cw_auth", authKey);
 			renderStatus(s);
 			$("sec-newpw").value = "";
-			$("msg").textContent = t("secSetOk");
+			flashMessage(t("secSetOk"));
 			toggleSecPanel();
 		})
-		.catch(() => {});
+		.catch(() => { flashMessage(t("statusLoadError")); });
 });
 
 $("sec-remove").addEventListener("click", () => {
@@ -473,16 +504,16 @@ $("sec-remove").addEventListener("click", () => {
 			authKey = "";
 			localStorage.removeItem("cw_auth");
 			renderStatus(s);
-			$("msg").textContent = t("secRemoveOk");
+			flashMessage(t("secRemoveOk"));
 			toggleSecPanel();
 		})
-		.catch(() => {});
+		.catch(() => { flashMessage(t("statusLoadError")); });
 });
 
 applyStaticI18n();
 refresh();
 setInterval(refresh, 15000);
-setInterval(() => { if (lastStatus) renderStatus(lastStatus, true); }, 1000);
+setInterval(() => { updateStatusBox(lastStatus); }, 1000);
 </script>
 </body>
 </html>
