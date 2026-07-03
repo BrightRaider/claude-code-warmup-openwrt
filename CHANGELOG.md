@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.0.1] - 2026-07-02
+
+### Fixed
+
+- The live countdown ticker was overwriting the mode/time form fields every second with the last known server state, silently reverting an in-progress "fixed time" selection before it could be saved.
+- Saving, pinging, or changing security/token settings now shows a clear, highlighted confirmation message instead of a small, easy-to-miss text update.
+
 ## [1.0.0] - 2026-07-02
 
 Initial release.
