@@ -11,6 +11,7 @@ P_ENABLED=""
 P_AUTH=""
 P_NEWPW=""
 P_DATE=""
+P_LOCALTIME=""
 
 old_ifs=$IFS
 IFS='&'
@@ -26,9 +27,15 @@ for kv in $QUERY_STRING; do
 		auth) P_AUTH="$qv" ;;
 		newpw) P_NEWPW="$qv" ;;
 		date) P_DATE="$qv" ;;
+		localtime) P_LOCALTIME="$qv" ;;
 	esac
 done
 IFS=$old_ifs
+
+case "$P_LOCALTIME" in
+	[0-9][0-9]:[0-9][0-9]) : ;;
+	*) P_LOCALTIME="" ;;
+esac
 
 if [ -n "$secret" ] && [ "$P_AUTH" != "$secret" ]; then
 	echo "Status: 403 Forbidden"
@@ -66,11 +73,11 @@ case "$ACTION" in
 			0|1) uci set claudewarmup.settings.enabled="$P_ENABLED" ;;
 		esac
 		uci commit claudewarmup
-		/usr/bin/claude-warmup.sh apply
+		/usr/bin/claude-warmup.sh apply "$P_LOCALTIME"
 		status_with_protected
 		;;
 	trigger)
-		/usr/bin/claude-warmup.sh fire
+		/usr/bin/claude-warmup.sh fire manual
 		status_with_protected
 		;;
 	log)
@@ -80,9 +87,11 @@ case "$ACTION" in
 		umask 077
 		if [ -z "$P_NEWPW" ]; then
 			rm -f "$WEBAUTH_FILE"
+			/usr/bin/claude-warmup.sh logmsg "Password protection removed via web UI"
 		else
 			printf '%s' "$P_NEWPW" > "$WEBAUTH_FILE"
 			chmod 600 "$WEBAUTH_FILE"
+			/usr/bin/claude-warmup.sh logmsg "Password protection enabled via web UI"
 		fi
 		status_with_protected
 		;;

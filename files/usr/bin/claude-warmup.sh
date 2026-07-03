@@ -42,8 +42,9 @@ clear_failure() {
 }
 
 fire() {
+	source_label="${1:-auto}"
 	if [ ! -s "$TOKEN_FILE" ]; then
-		log "ERROR: token file $TOKEN_FILE missing or empty"
+		log "ERROR ($source_label): token file $TOKEN_FILE missing or empty"
 		return 1
 	fi
 	token=$(cat "$TOKEN_FILE")
@@ -65,21 +66,21 @@ fire() {
 	if [ $curl_rc -ne 0 ]; then
 		rm -f "$hdrfile"
 		record_failure "network" 0
-		log "ERROR: curl failed (rc=$curl_rc)"
+		log "ERROR ($source_label): curl failed (rc=$curl_rc)"
 		return 1
 	fi
 
 	if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
 		rm -f "$hdrfile"
 		record_failure "unauthorized" 1
-		log "ERROR: warmup request failed (http=$http_code) - token likely invalid/expired/revoked"
+		log "ERROR ($source_label): warmup request failed (http=$http_code) - token likely invalid/expired/revoked"
 		return 1
 	fi
 
 	if [ "$http_code" != "200" ]; then
 		rm -f "$hdrfile"
 		record_failure "http_$http_code" 0
-		log "ERROR: warmup request failed (http=$http_code)"
+		log "ERROR ($source_label): warmup request failed (http=$http_code)"
 		return 1
 	fi
 
@@ -95,9 +96,9 @@ fire() {
 
 	if [ -n "$reset" ]; then
 		echo "${reset}:${util:-0}:${reset7d:-0}:${util7d:-0}:${ustatus:-unknown}" > "$STATE_FILE"
-		log "OK: warmup sent, 5h reset=$reset util=$util | 7d reset=$reset7d util=$util7d | status=$ustatus"
+		log "OK ($source_label): ping sent, 5h window now resets $(date -d @"$reset" '+%Y-%m-%d %H:%M:%S %Z') (util=$util) | 7d resets $(date -d @"$reset7d" '+%Y-%m-%d %H:%M:%S %Z') (util=$util7d) | status=$ustatus"
 	else
-		log "WARN: warmup sent but no rate-limit header found in response"
+		log "WARN ($source_label): ping sent but no rate-limit header found in response"
 	fi
 	return 0
 }
@@ -202,9 +203,11 @@ do_log() {
 }
 
 apply_cron() {
+	local_hint="$1"
 	mode=$(uci -q get $CONF.settings.mode); mode=${mode:-keepwarm}
 	fixed_hour=$(uci -q get $CONF.settings.fixed_hour); fixed_hour=${fixed_hour:-0}
 	fixed_minute=$(uci -q get $CONF.settings.fixed_minute); fixed_minute=${fixed_minute:-1}
+	enabled=$(uci -q get $CONF.settings.enabled); enabled=${enabled:-1}
 
 	CRONTAB=/etc/crontabs/root
 	touch "$CRONTAB"
@@ -220,15 +223,27 @@ apply_cron() {
 	mv "$CRONTAB.new" "$CRONTAB"
 	rm -f "$CRONTAB.tmp"
 	/etc/init.d/cron restart >/dev/null 2>&1
-	log "INFO: cron applied (mode=$mode fixed=$fixed_hour:$fixed_minute)"
+
+	if [ "$enabled" = "1" ]; then en_txt="enabled"; else en_txt="disabled"; fi
+	fixed_hhmm=$(printf '%02d:%02d' "$fixed_hour" "$fixed_minute")
+	if [ "$mode" = "fixed" ]; then
+		if [ -n "$local_hint" ]; then
+			log "INFO: settings saved via web UI - $en_txt, mode=fixed, start time $local_hint (your time) = $fixed_hhmm (router time, timezone $(date +%Z))"
+		else
+			log "INFO: settings saved via web UI - $en_txt, mode=fixed, start time $fixed_hhmm (router time, timezone $(date +%Z))"
+		fi
+	else
+		log "INFO: settings saved via web UI - $en_txt, mode=keepwarm (continuous)"
+	fi
 }
 
 case "$1" in
 	check) do_check ;;
-	fire) fire ;;
+	fire) fire "${2:-manual}" ;;
 	status) do_status ;;
-	apply) apply_cron ;;
+	apply) apply_cron "$2" ;;
 	log) do_log ;;
 	settoken) do_settoken "$2" ;;
-	*) echo "Usage: $0 {check|fire|status|apply|log|settoken}" >&2; exit 1 ;;
+	logmsg) log "INFO: $2" ;;
+	*) echo "Usage: $0 {check|fire|status|apply|log|settoken|logmsg}" >&2; exit 1 ;;
 esac

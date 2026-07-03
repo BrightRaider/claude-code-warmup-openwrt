@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [1.0.2] - 2026-07-02
+
+### Changed
+
+- Log messages now describe what actually happened in plain language instead of internal function names — e.g. "settings saved via web UI - enabled, mode=fixed, start time 09:30 (your time) = 07:30 (router time, timezone UTC)" instead of "cron applied (mode=fixed fixed=7:30)".
+- Manual pings (via the "Ping now" button) are now distinguished from automatic ones in the log.
+- Setting or removing the web UI password is now logged.
+
 ## [1.0.1] - 2026-07-02
 
 ### Fixed

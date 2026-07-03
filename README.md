@@ -12,7 +12,7 @@ Not affiliated with Anthropic. Community tool, MIT licensed.
 - **Two scheduling modes** — keep the window continuously warm around the clock, or stay quiet until a fixed time you pick (00:00–23:59) and then keep it continuously warm for the rest of that day, going quiet again overnight before the next day's start time.
 - **5h + 7-day usage bars** — utilization and reset time for both subscription limits, at a glance.
 - **Token validity tracking** — enter your token's issue date once, get a running countdown to its 1-year expiry.
-- **Error detection** — the status box turns red immediately on an invalid/expired/revoked token; other failures (e.g. a network blip) only alarm after 3 in a row, so a single transient hiccup doesn't false-alarm. A built-in log viewer (📄) shows the last 100 lines.
+- **Error detection** — the status box turns red immediately on an invalid/expired/revoked token; other failures (e.g. a network blip) only alarm after 3 in a row, so a single transient hiccup doesn't false-alarm. A built-in log viewer (📄) shows the last 100 lines, in plain language ("settings saved via web UI - ...", "ping sent (manual)...") rather than opaque internal messages.
 - **Optional password protection** — off by default; set your own passphrase for the page any time from a collapsible panel behind a lock icon, no reinstall needed.
 - **German/English UI** — auto-detected from the browser, switchable, remembered.
 - **LuCI integration** — reachable from Services → Claude Warmup, not just a standalone URL.

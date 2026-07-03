@@ -455,8 +455,9 @@ $("save").addEventListener("click", () => {
 	const tzOffset = lastStatus ? lastStatus.tz_offset_seconds : 0;
 	const routerTime = localToRouterTime(lh, lm, tzOffset);
 	const enabled = $("enabled").checked ? 1 : 0;
+	const localtime = String(lh).padStart(2,'0') + ":" + String(lm).padStart(2,'0');
 	flashMessage(t("saving"));
-	apiCall("set", `mode=${mode}&hour=${routerTime.hour}&minute=${routerTime.minute}&enabled=${enabled}`)
+	apiCall("set", `mode=${mode}&hour=${routerTime.hour}&minute=${routerTime.minute}&enabled=${enabled}&localtime=${localtime}`)
 		.then(s => {
 			formDirty = false;
 			renderStatus(s);
