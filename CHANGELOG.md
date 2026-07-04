@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [1.0.3] - 2026-07-03
+
+### Added
+
+- A hint next to the resource usage bars clarifying that the numbers are only as fresh as the last ping (not live), and that "Ping now" refreshes them immediately. Documented in the README as well.
+
 ## [1.0.2] - 2026-07-02
 
 ### Changed

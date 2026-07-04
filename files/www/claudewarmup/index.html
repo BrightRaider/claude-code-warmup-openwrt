@@ -66,6 +66,7 @@
 
 		<fieldset>
 			<legend data-i18n="resTitle"></legend>
+			<p class="muted" data-i18n="resStaleHint"></p>
 			<div class="res-row"><span data-i18n="res5h"></span><span id="res-5h-pct">–</span></div>
 			<div class="bar-track"><div class="bar-fill" id="res-5h-bar" style="width:0%"></div></div>
 			<div class="muted" id="res-5h-end">–</div>
@@ -124,6 +125,7 @@ const translations = {
 		intro: "Hält das rollierende 5h-Nutzungsfenster deines Claude-Abos aktiv, per offiziellem Long-Lived-Token (claude setup-token).",
 		loading: "Lade Status…",
 		resTitle: "Ressourcen-Verbrauch",
+		resStaleHint: "Werte so aktuell wie der letzte Ping (nicht live) — Button unten \"Jetzt sofort pingen\" aktualisiert sie sofort.",
 		res5h: "5-Stunden-Fenster",
 		res7d: "7-Tage-Fenster",
 		modeTitle: "Modus",
@@ -171,6 +173,7 @@ const translations = {
 		intro: "Keeps your Claude subscription's rolling 5h usage window warm, via the official long-lived token (claude setup-token).",
 		loading: "Loading status…",
 		resTitle: "Resource usage",
+		resStaleHint: "Values are as fresh as the last ping (not live) — the \"Ping now\" button below refreshes them immediately.",
 		res5h: "5-hour window",
 		res7d: "7-day window",
 		modeTitle: "Mode",
