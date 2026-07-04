@@ -6,7 +6,11 @@ All notable changes to this project are documented here.
 
 ### Added
 
-- A hint next to the resource usage bars clarifying that the numbers are only as fresh as the last ping (not live), and that "Ping now" refreshes them immediately. Documented in the README as well.
+- A hint next to the resource usage bars clarifying that the numbers are only as fresh as the last ping (not live). Documented in the README as well.
+
+### Fixed
+
+- That hint (and the README) initially implied "Ping now" was a free refresh. Corrected: it's a real API request that consumes a small amount of actual quota, same as any other ping — use it deliberately, not as a casual refresh button.
 
 ## [1.0.2] - 2026-07-02
 
