@@ -4,7 +4,7 @@ Keeps your **Claude Pro/Max subscription's rolling 5-hour usage window** warm by
 
 Not affiliated with Anthropic. Community tool, MIT licensed.
 
-![Claude Warmup web UI](docs/screenshot.png)
+![Claude Warmup web UI](docs/WarumUp.PNG)
 
 ## Features
 
